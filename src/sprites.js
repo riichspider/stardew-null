@@ -1,7 +1,8 @@
 // Procedural pixel-art sprites drawn into offscreen canvases at boot.
 // Tile size: 32x32 px. Player: 24x32 px (rendered centered in 32x32).
 
-export const TILE = 32;
+import { TILE } from './config.js';
+export { TILE };
 export const PLAYER_W = 24;
 export const PLAYER_H = 32;
 

@@ -1,0 +1,16 @@
+{
+  "name": "stardew-null",
+  "version": "0.1.0",
+  "description": "Mini Stardew Valley em JavaScript puro — sem dependências, sem assets externos.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 5173",
+    "dev": "python3 -m http.server 5173",
+    "lint": "node --check src/main.js && node --check src/game.js && node --check src/world.js && node --check src/player.js && node --check src/sprites.js && node --check src/items.js && node --check src/crops.js && node --check src/inventory.js && node --check src/ui.js && node --check src/audio.js && node --check src/input.js && node --check src/save.js && node --check src/config.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

@@ -10,16 +10,17 @@ import { createPlayer, updatePlayer, tileInFront, describeTargetAction, playerTi
 import { createInventory, addItem, selectedDef, selectedItem, removeFromSlot } from './inventory.js';
 import * as UI from './ui.js';
 import { saveGame, loadGame, hasSave, clearSave } from './save.js';
+import {
+  CANVAS_W, CANVAS_H,
+  REAL_SECONDS_PER_GAME_MIN,
+  DAY_START_HOUR, DAY_FAINT_HOUR, SEASON_LENGTH_DAYS, SEASONS,
+  STARTING_MONEY, ENERGY_MAX, FAINT_ENERGY_RATIO,
+} from './config.js';
 
 // ---------------- Constants ----------------
 
-const CANVAS_W = 960, CANVAS_H = 640;
 const VIEW_W_TILES = CANVAS_W / TILE; // 30
 const VIEW_H_TILES = CANVAS_H / TILE; // 20
-
-// Day length: 6:00 → 26:00 = 20 in-game hours.
-// Real-time: tunable. 1 in-game minute = X real seconds.
-const REAL_SECONDS_PER_GAME_MIN = 0.6; // ~12 minutes per real-time game day
 
 const ACTION_LABELS = {
   till: 'Arar',
@@ -39,12 +40,10 @@ const ACTION_LABELS = {
   talk: 'Falar',
 };
 
-const SEASONS = ['spring', 'summer', 'fall', 'winter'];
-
 // ---------------- State factory ----------------
 
 export function createInitialState() {
-  const world = createWorld(20260509);
+  const world = createWorld();
   const inv = createInventory();
   // Starter loadout: tools in slots 0-4, parsnip seeds in 5
   inv.slots[0] = { id: 'hoe',      qty: 1 };
@@ -59,15 +58,15 @@ export function createInitialState() {
     world,
     inventory: inv,
     player: createPlayer(world.spawn),
-    money: 500,
-    energy: 100,
-    energyMax: 100,
+    money: STARTING_MONEY,
+    energy: ENERGY_MAX,
+    energyMax: ENERGY_MAX,
     day: 1,
-    season: 'spring',
+    season: SEASONS[0],
     year: 1,
-    hour: 6,
+    hour: DAY_START_HOUR,
     minute: 0,
-    weather: 'sun', // unused for now
+    weather: 'sun',
     timeAccum: 0,
     paused: false,
     fainted: false,
@@ -79,7 +78,7 @@ export function createInitialState() {
 export function loadStateFromSave() {
   const data = loadGame();
   if (!data) return null;
-  const world = createWorld(20260509); // base
+  const world = createWorld(); // base
   // Replace tiles + objects with saved
   if (data.tiles) {
     world.tiles = new Uint8Array(data.tiles);
@@ -90,7 +89,7 @@ export function loadStateFromSave() {
   return {
     world,
     inventory: data.inventory,
-    player: createPlayer({ x: 5, y: 6 }),
+    player: createPlayer(world.spawn),
     money: data.money,
     energy: data.energy,
     energyMax: data.energyMax,
@@ -165,8 +164,8 @@ export class Game {
       s.timeAccum -= whole * REAL_SECONDS_PER_GAME_MIN;
       s.minute += whole;
       while (s.minute >= 60) { s.minute -= 60; s.hour += 1; }
-      // pass out at 26:00 (2am) if not slept
-      if (s.hour >= 26 && !s.fainted) {
+      // pass out at DAY_FAINT_HOUR (default 02:00) if not slept
+      if (s.hour >= DAY_FAINT_HOUR && !s.fainted) {
         s.fainted = true;
         s.energy = Math.max(0, s.energy * 0.5);
         Audio.faint();
@@ -207,22 +206,21 @@ export class Game {
       }
     }
     s.day += 1;
-    if (s.day > 28) {
+    if (s.day > SEASON_LENGTH_DAYS) {
       s.day = 1;
       const idx = SEASONS.indexOf(s.season);
-      s.season = SEASONS[(idx + 1) % 4];
-      if (s.season === 'spring') s.year += 1;
+      s.season = SEASONS[(idx + 1) % SEASONS.length];
+      if (s.season === SEASONS[0]) s.year += 1;
     }
-    s.hour = 6;
+    s.hour = DAY_START_HOUR;
     s.minute = 0;
-    s.energy = forced ? Math.round(s.energyMax * 0.6) : s.energyMax;
+    s.energy = forced ? Math.round(s.energyMax * FAINT_ENERGY_RATIO) : s.energyMax;
     s.flash = 1.0;
     Audio.newDay();
-    // Move player back to bed area
+    // Move player back to the home spawn (path tile just south of the door)
     const p = s.player;
-    // place at the path tile just south of the bed
-    p.x = (3 + 1) * TILE + 4;
-    p.y = (3 + 4) * TILE;
+    p.x = s.world.spawn.x * TILE + 4;
+    p.y = s.world.spawn.y * TILE;
     p.dir = 'down';
     saveGame(s);
     UI.toast(`${seasonName(s.season)} ${s.day}, ano ${s.year}`);
@@ -264,11 +262,6 @@ export class Game {
     if (hb >= 0 && !UI.isAnyOverlayOpen()) {
       s.inventory.selected = hb;
       Audio.step();
-    }
-
-    // Re-render inventory if open (selected may have changed)
-    if (UI.isInventoryOpen()) {
-      // Cheap; UI.showInventory rebuilds DOM. Skip frame-by-frame to save work; only rebuild on actions.
     }
 
     if (UI.isAnyOverlayOpen()) {

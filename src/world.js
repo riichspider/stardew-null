@@ -7,7 +7,7 @@
 // Objects: { type, x, y, hp?, watered?, planted?, stage?, regrowDays? }
 //   types: 'tree','stump','rock','weed','grassTuft','npc'
 
-import { TILE } from './sprites.js';
+import { WORLD_W, WORLD_H, WORLD_SEED } from './config.js';
 
 export const T = {
   GRASS: 0, PATH: 1, TILLED: 2, WATERED: 3, WATER: 4, STONE_FLOOR: 5, WOOD_FLOOR: 6,
@@ -32,8 +32,8 @@ function mulberry32(a) {
   };
 }
 
-export function createWorld(seed = 1337) {
-  const W = 50, H = 32;
+export function createWorld(seed = WORLD_SEED) {
+  const W = WORLD_W, H = WORLD_H;
   const tiles = new Uint8Array(W * H);
   const objects = []; // sparse list
 
@@ -69,6 +69,9 @@ export function createWorld(seed = 1337) {
   for (let dy = 0; dy < 5; dy++) set(hx + 1, hy + 3 + dy, T.PATH);
   // path branching to farm area
   for (let dx = 0; dx < 8; dx++) set(hx + 1 + dx, hy + 7, T.PATH);
+  // porch access lane: connect the bed/chest column down to the y-branch path,
+  // so the player can walk to the bed without trees blocking the way.
+  for (let dy = 3; dy < 7; dy++) set(hx + 4, hy + dy, T.PATH);
 
   // ---------- Shop building (SW) ----------
   const sx = 4, sy = 22;
@@ -101,13 +104,15 @@ export function createWorld(seed = 1337) {
     return true;
   }
 
-  // Trees (avoid farm zone roughly between x=12..30, y=10..22)
+  // Trees (avoid farm zone roughly between x=12..30, y=10..22).
+  // House/shop exclusion zones extend a couple of tiles past the building so the
+  // walking lanes between path branches and porches are guaranteed clear.
   for (let i = 0; i < 60; i++) {
     const x = 1 + Math.floor(rand() * (W - 2));
     const y = 1 + Math.floor(rand() * (H - 2));
     const inFarm = x >= 12 && x <= 30 && y >= 10 && y <= 22;
-    const inHouse = x >= hx - 1 && x <= hx + 6 && y >= hy - 1 && y <= hy + 4;
-    const inShop = x >= sx - 1 && x <= sx + 6 && y >= sy - 1 && y <= sy + 4;
+    const inHouse = x >= hx - 1 && x <= hx + 6 && y >= hy - 1 && y <= hy + 8;
+    const inShop = x >= sx - 1 && x <= sx + 6 && y >= sy - 1 && y <= sy + 7;
     const nearPath = getT(x, y) === T.PATH;
     if (inFarm || inHouse || inShop || nearPath) continue;
     placeObj('tree', x, y, { hp: 3 });
