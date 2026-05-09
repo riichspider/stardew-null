@@ -21,6 +21,24 @@ const VIEW_H_TILES = CANVAS_H / TILE; // 20
 // Real-time: tunable. 1 in-game minute = X real seconds.
 const REAL_SECONDS_PER_GAME_MIN = 0.6; // ~12 minutes per real-time game day
 
+const ACTION_LABELS = {
+  till: 'Arar',
+  untill: 'Desfazer',
+  plant: 'Plantar',
+  fill: 'Encher',
+  water: 'Regar',
+  chop: 'Cortar',
+  chopStump: 'Cortar toco',
+  rock: 'Quebrar',
+  cut: 'Ceifar',
+  harvest: 'Colher',
+  shop: 'Loja',
+  enter: 'Entrar',
+  sleep: 'Dormir',
+  chest: 'Baú',
+  talk: 'Falar',
+};
+
 const SEASONS = ['spring', 'summer', 'fall', 'winter'];
 
 // ---------------- State factory ----------------
@@ -465,16 +483,29 @@ export class Game {
     drawables.sort((a, b) => a.y - b.y);
     for (const d of drawables) d.draw();
 
-    // Pass 3: action target highlight
+    // Pass 3: action target highlight + label
     if (!UI.isAnyOverlayOpen()) {
       const def = selectedDef(s.inventory);
       const item = selectedItem(s.inventory);
       const target = describeTargetAction(s.player, s.world, def, item);
       if (target.kind !== 'none') {
         const tx = target.tx, ty = target.ty;
-        ctx.strokeStyle = 'rgba(255, 230, 100, 0.85)';
+        ctx.strokeStyle = 'rgba(255, 230, 100, 0.95)';
         ctx.lineWidth = 2;
         ctx.strokeRect(tx * TILE - cx + 1, ty * TILE - cy + 1, TILE - 2, TILE - 2);
+        const label = ACTION_LABELS[target.kind];
+        if (label) {
+          ctx.font = 'bold 12px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const lx = tx * TILE - cx + TILE / 2;
+          const ly = ty * TILE - cy - 10;
+          const w = ctx.measureText(label).width + 10;
+          ctx.fillStyle = 'rgba(35, 26, 16, 0.85)';
+          ctx.fillRect(lx - w / 2, ly - 9, w, 18);
+          ctx.fillStyle = '#ffe69b';
+          ctx.fillText(label, lx, ly);
+        }
       }
     }
 
@@ -562,6 +593,13 @@ export class Game {
     const p = s.player;
     const dx = Math.floor(p.x - cx);
     const dy = Math.floor(p.y - cy);
+    // Soft shadow under the player for visibility/depth
+    this.ctx.save();
+    this.ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    this.ctx.beginPath();
+    this.ctx.ellipse(dx + 12, dy + 31, 9, 3, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.restore();
     const frames = SPR.player[p.dir];
     const fi = p.moving ? p.animFrame : 0;
     this.ctx.drawImage(frames[fi], dx, dy);
