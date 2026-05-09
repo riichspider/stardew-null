@@ -6,3 +6,9 @@ dist/
 *.log
 .env
 .env.local
+
+# Test artifacts (kept locally; not part of production code)
+test-plan.md
+test-report.md
+test-screenshots/
+

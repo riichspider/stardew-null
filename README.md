@@ -6,12 +6,19 @@ Um mini-jogo de fazenda inspirado em Stardew Valley, feito em **JavaScript puro*
 
 ## Como jogar
 
-Abra `index.html` em qualquer servidor estático moderno (ou direto pelo navegador via `file://` na maioria dos browsers).
+Qualquer servidor estático moderno serve. Não há build step, dependências ou bundler.
 
 ```bash
-# Opção rápida: servidor estático com Python
+# Opção rápida (precisa de Python 3 instalado):
+npm start            # equivalente a: python3 -m http.server 5173
+# ou diretamente:
 python3 -m http.server 5173
-# depois abra http://localhost:5173/
+```
+
+Depois abra http://localhost:5173/.
+
+```bash
+npm run lint         # checa sintaxe de todos os módulos com `node --check`
 ```
 
 ### Controles
@@ -51,6 +58,7 @@ stardew-clone/
 ├── styles.css        # HUD, menus
 └── src/
     ├── main.js       # boot
+    ├── config.js     # constantes de balance (mundo, tempo, energia, dinheiro)
     ├── game.js       # game loop + render
     ├── world.js      # mapa, tiles, objetos
     ├── player.js     # movimento, animação, mira
@@ -63,6 +71,8 @@ stardew-clone/
     ├── input.js      # teclado
     └── save.js       # localStorage
 ```
+
+Para balancear o jogo (tamanho do mundo, duração do dia, energia inicial, dinheiro inicial, etc.) edite **`src/config.js`** — é o ponto único de tuning.
 
 ## Limitações conhecidas
 
