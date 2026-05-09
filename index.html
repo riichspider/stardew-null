@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Stardew Null — Mini Stardew em JS</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2392c84a'/><circle cx='8' cy='9' r='3' fill='%23ff7a3a'/><rect x='7' y='3' width='2' height='4' fill='%234d2b1a'/></svg>" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="game" width="960" height="640" tabindex="0"></canvas>
+
+    <div id="hud">
+      <div class="hud-top">
+        <div id="clock">Primavera 1 — 06:00</div>
+        <div id="weather">Ensolarado</div>
+        <div id="money">💰 500g</div>
+      </div>
+      <div class="hud-bottom">
+        <div id="energy-wrap" title="Energia">
+          <div class="bar-label">⚡</div>
+          <div class="bar"><div id="energy" class="bar-fill"></div></div>
+          <div id="energy-num">100/100</div>
+        </div>
+        <div id="hotbar"></div>
+      </div>
+    </div>
+
+    <div id="dialog" class="overlay hidden">
+      <div class="dialog-box">
+        <div id="dialog-name"></div>
+        <div id="dialog-text"></div>
+        <div class="dialog-hint">[Espaço] continuar</div>
+      </div>
+    </div>
+
+    <div id="shop" class="overlay hidden">
+      <div class="shop-box">
+        <div class="shop-header"><span id="shop-title">Loja Geral</span><span id="shop-money">500g</span></div>
+        <div class="shop-tabs">
+          <button data-tab="buy" class="active">Comprar</button>
+          <button data-tab="sell">Vender</button>
+        </div>
+        <div id="shop-items"></div>
+        <div class="shop-hint">[ESC] sair · [click] comprar/vender</div>
+      </div>
+    </div>
+
+    <div id="inventory" class="overlay hidden">
+      <div class="inv-box">
+        <div class="inv-header">Inventário</div>
+        <div id="inv-grid"></div>
+        <div class="inv-hint">[I/ESC] fechar · [click] equipar/usar</div>
+      </div>
+    </div>
+
+    <div id="sleep-menu" class="overlay hidden">
+      <div class="dialog-box">
+        <div id="sleep-name">Cama</div>
+        <div id="sleep-text">Dormir até o próximo dia? Suas plantas vão crescer.</div>
+        <div class="dialog-hint">
+          <button id="sleep-yes">Dormir [Espaço]</button>
+          <button id="sleep-no">Cancelar [ESC]</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="title" class="overlay">
+      <div class="title-box">
+        <h1>Stardew Null</h1>
+        <p class="subtitle">Um mini-Stardew em JavaScript puro</p>
+        <div class="controls">
+          <h3>Controles</h3>
+          <ul>
+            <li><b>WASD / setas</b> — andar</li>
+            <li><b>Espaço</b> — usar ferramenta · interagir · avançar diálogo</li>
+            <li><b>1–9</b> — slots da hotbar</li>
+            <li><b>I</b> — abrir inventário</li>
+            <li><b>ESC</b> — fechar menu</li>
+          </ul>
+          <h3>Dicas rápidas</h3>
+          <ul>
+            <li>Use a <b>enxada</b> para arar a terra, depois plante <b>sementes</b>.</li>
+            <li><b>Encha</b> o regador no laguinho (use o regador em cima da água).</li>
+            <li>Corte <b>árvores</b> com o machado e quebre <b>pedras</b> com a picareta.</li>
+            <li>Volte para a <b>cama</b> antes das 02:00 — senão você desmaia.</li>
+            <li>Compre sementes na <b>Loja Geral</b> (casa marrom no canto SO da fazenda).</li>
+          </ul>
+        </div>
+        <button id="start-btn">Começar [Espaço]</button>
+        <button id="continue-btn" class="hidden">Continuar save</button>
+        <p class="footer">Feito com ❤️ por Devin · sem dependências, sem assets externos</p>
+      </div>
+    </div>
+
+    <div id="toast" class="hidden"></div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
