@@ -2,7 +2,7 @@
 
 Um mini-jogo de fazenda inspirado em Stardew Valley, feito em **JavaScript puro** (sem frameworks, sem bundlers, sem assets externos). Tudo é desenhado proceduralmente em canvas — incluindo sprites, áudio e o mapa do mundo.
 
-> Demo: <substitua-pelo-link-publico-quando-deploy-rodar>
+> Demo ao vivo: https://stardew-clone-rfhmzkbr.devinapps.com
 
 ## Como jogar
 
