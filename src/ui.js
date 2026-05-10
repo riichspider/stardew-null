@@ -111,7 +111,7 @@ export function showInventory(state) {
       cell.innerHTML = `<span class="icon">·</span><span class="meta"><span class="name">— vazio —</span><span class="qty">slot ${i + 1}</span></span>`;
     } else {
       const def = ITEMS[s.id];
-      if (!def) return;
+      if (!def) { grid.appendChild(cell); return; }
       cell.innerHTML = `
         <span class="icon">${def.icon}</span>
         <span class="meta"><span class="name">${def.name}</span><span class="qty">×${s.qty}</span></span>
