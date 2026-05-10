@@ -12,6 +12,8 @@ import { buildOpeningTimeline } from './cutscene-timeline.js';
 import './evidence.js';
 // Load dialog system
 import './dialogs.js';
+// Load gadgets system
+import './gadgets.js';
 
 const canvas = document.getElementById('game');
 canvas.focus();

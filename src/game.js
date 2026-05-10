@@ -9,12 +9,13 @@ import { Audio } from './audio.js';
 import { SPR, PLAYER_W, PLAYER_H } from './sprites.js';
 import { getScene } from './scenes.js';
 import { createPlayer, updatePlayer, hotspotInFront } from './player.js';
-import { createInventory } from './inventory.js';
+import { addItem } from './inventory.js';
 import * as UI from './ui.js';
 import { saveGame, loadGame } from './save.js';
 import { applyLighting } from './lighting.js';
 import { collectEvidence, EVIDENCE } from './evidence.js';
 import { getDialog, startDialog, getAvailableChoices, selectChoice } from './dialogs.js';
+import { useGadget, selectedIsGadget } from './gadgets.js';
 import {
   CANVAS_W, CANVAS_H,
   REAL_SECONDS_PER_GAME_MIN,
@@ -29,6 +30,13 @@ import {
 export function createInitialState(sceneId = DEFAULT_SCENE) {
   const scene = getScene(sceneId);
   const inv = createInventory();
+  
+  // Give player starting gadgets
+  addItem(inv, 'gadget_lantern', 1);
+  addItem(inv, 'gadget_recorder', 1);
+  addItem(inv, 'gadget_scanner', 1);
+  addItem(inv, 'gadget_taser', 1);
+  
   return {
     sceneId,
     inventory: inv,
@@ -196,7 +204,23 @@ export class Game {
     const interact = Input.consumePress('action') || Input.consumePress('up');
     if (interact) {
       if (UI.isDialogOpen()) UI.hideDialog();
-      else if (!UI.isAnyOverlayOpen()) this.useTool();
+      else if (!UI.isAnyOverlayOpen()) {
+        // First check for hotspot/NPC interaction
+        const scene = getScene(s.sceneId);
+        const target = hotspotInFront(s.player, scene);
+        if (target) {
+          // Has interaction - useTool handles it
+          this.useTool();
+        } else {
+          // No interaction - try gadget
+          const gadget = selectedIsGadget(s);
+          if (gadget) {
+            useGadget(s, s.inventory.slots[s.inventory.selected].id);
+          } else {
+            Audio.step();
+          }
+        }
+      }
     }
 
     const hb = Input.takeHotbarPress();
