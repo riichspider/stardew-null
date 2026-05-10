@@ -87,11 +87,12 @@ function _stopVoice(name, fadeS = 0.4) {
   _voices.delete(name);
   try {
     const c = ensureCtx();
-    if (!c) return;
-    const t = c.currentTime;
-    v.gain.gain.cancelScheduledValues(t);
-    v.gain.gain.setValueAtTime(v.gain.gain.value, t);
-    v.gain.gain.exponentialRampToValueAtTime(0.0001, t + fadeS);
+    const t = c ? c.currentTime : 0;
+    if (c) {
+      v.gain.gain.cancelScheduledValues(t);
+      v.gain.gain.setValueAtTime(v.gain.gain.value, t);
+      v.gain.gain.exponentialRampToValueAtTime(0.0001, t + fadeS);
+    }
     v.source.stop(t + fadeS + 0.05);
   } catch (e) {
     // ignore
