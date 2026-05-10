@@ -1,16 +1,15 @@
-// Game orchestrator: state, update, render.
+// Game orchestrator: state, update, side-view scene render.
 //
-// Engine-level scaffold post-farming gut: keeps the loop, camera, day/night
-// cycle, save/load, HUD, dialog, inventory, and a placeholder "use" action
-// for chopping trees / breaking rocks. All farming, shop, sleep, and seasonal
-// systems were removed; they will be replaced by noir RPG mechanics.
+// The world is now a registry of side-view scenes (see `src/scenes.js`),
+// not a top-down tile grid. Each scene is a horizontally-scrolling corridor
+// with parallax background layers, walkable bounds, and hotspots.
 
 import { Input } from './input.js';
 import { Audio } from './audio.js';
-import { TILE, SPR } from './sprites.js';
-import { createWorld, tileAt, T, endOfDay } from './world.js';
-import { createPlayer, updatePlayer, describeTargetAction } from './player.js';
-import { createInventory, addItem, selectedDef, selectedItem } from './inventory.js';
+import { SPR, PLAYER_W, PLAYER_H } from './sprites.js';
+import { getScene } from './scenes.js';
+import { createPlayer, updatePlayer, hotspotInFront } from './player.js';
+import { createInventory } from './inventory.js';
 import * as UI from './ui.js';
 import { saveGame, loadGame } from './save.js';
 import {
@@ -18,27 +17,19 @@ import {
   REAL_SECONDS_PER_GAME_MIN,
   DAY_START_HOUR, DAY_FAINT_HOUR,
   STARTING_MONEY, ENERGY_MAX, FAINT_ENERGY_RATIO,
+  DEFAULT_SCENE,
+  PALETTE,
 } from './config.js';
-
-// ---------------- Constants ----------------
-
-const ACTION_LABELS = {
-  chop: 'Cortar',
-  chopStump: 'Cortar toco',
-  rock: 'Quebrar',
-  enter: 'Entrar',
-  talk: 'Falar',
-};
 
 // ---------------- State factory ----------------
 
-export function createInitialState() {
-  const world = createWorld();
+export function createInitialState(sceneId = DEFAULT_SCENE) {
+  const scene = getScene(sceneId);
   const inv = createInventory();
   return {
-    world,
+    sceneId,
     inventory: inv,
-    player: createPlayer(world.spawn),
+    player: createPlayer(scene),
     money: STARTING_MONEY,
     energy: ENERGY_MAX,
     energyMax: ENERGY_MAX,
@@ -48,21 +39,22 @@ export function createInitialState() {
     timeAccum: 0,
     paused: false,
     fainted: false,
-    waterAnimT: 0,
-    flash: 0, // screen flash for transitions
+    flash: 0,
   };
 }
 
 export function loadStateFromSave() {
   const data = loadGame();
   if (!data) return null;
-  const world = createWorld();
-  if (data.tiles) world.tiles = new Uint8Array(data.tiles);
-  if (Array.isArray(data.objects)) world.objects = data.objects;
+  const sceneId = data.sceneId || DEFAULT_SCENE;
+  const scene = getScene(sceneId);
+  const player = createPlayer(scene);
+  if (typeof data.playerX === 'number') player.x = data.playerX;
+  if (data.playerDir === 'left' || data.playerDir === 'right') player.dir = data.playerDir;
   return {
-    world,
+    sceneId,
     inventory: data.inventory,
-    player: createPlayer(world.spawn),
+    player,
     money: data.money,
     energy: data.energy,
     energyMax: data.energyMax,
@@ -72,9 +64,7 @@ export function loadStateFromSave() {
     timeAccum: 0,
     paused: false,
     fainted: false,
-    waterAnimT: 0,
     flash: 0,
-    _restorePlayer: data.player,
   };
 }
 
@@ -90,17 +80,10 @@ export class Game {
     this.running = false;
     this._raf = null;
     this._cameraX = 0;
-    this._cameraY = 0;
   }
 
   start(state) {
     this.state = state;
-    if (state._restorePlayer) {
-      state.player.x = state._restorePlayer.x;
-      state.player.y = state._restorePlayer.y;
-      state.player.dir = state._restorePlayer.dir;
-      delete state._restorePlayer;
-    }
     this.lastT = performance.now();
     this.running = true;
     cancelAnimationFrame(this._raf);
@@ -134,12 +117,12 @@ export class Game {
       s.timeAccum -= whole * REAL_SECONDS_PER_GAME_MIN;
       s.minute += whole;
       while (s.minute >= 60) { s.minute -= 60; s.hour += 1; }
-      // Auto-recover at the late-night cutoff (placeholder until the noir
-      // sleep / safe-house mechanic replaces this).
+      // Auto-recover at sunrise (placeholder until the safe-house mechanic
+      // replaces this in a later PR).
       if (s.hour >= DAY_FAINT_HOUR && !s.fainted) {
         s.fainted = true;
         Audio.faint();
-        UI.toast('Você apagou. Acordou no dia seguinte.');
+        UI.toast('Você descansou. Acordou na noite seguinte.');
         setTimeout(() => this.recoverDay(true), 600);
       }
     }
@@ -152,34 +135,23 @@ export class Game {
       if (!this.state.fainted) {
         this.state.fainted = true;
         Audio.faint();
-        UI.toast('Sem energia! Você apagou.');
+        UI.toast('Sem energia! Você desmaiou.');
         setTimeout(() => this.recoverDay(true), 600);
       }
     }
   }
 
-  // ---------- Day reset ----------
-  // Placeholder for "rest/sleep". Triggered automatically on faint or when
-  // running out of energy. Will be replaced by a dedicated safe-house /
-  // narrative beat in the noir RPG.
-
   recoverDay(forced = false) {
     const s = this.state;
     s.fainted = false;
-    endOfDay(s.world);
     s.day += 1;
     s.hour = DAY_START_HOUR;
     s.minute = 0;
     s.energy = forced ? Math.round(s.energyMax * FAINT_ENERGY_RATIO) : s.energyMax;
     s.flash = 1.0;
     Audio.newDay();
-    // Send the player back to spawn after a faint.
-    const p = s.player;
-    p.x = s.world.spawn.x * TILE + 4;
-    p.y = s.world.spawn.y * TILE;
-    p.dir = 'down';
     saveGame(s);
-    UI.toast(`Dia ${s.day}`);
+    UI.toast(`Noite ${s.day}`);
   }
 
   // ---------- Update ----------
@@ -198,7 +170,11 @@ export class Game {
       else if (UI.isDialogOpen()) UI.hideDialog();
     }
 
-    if (Input.consumePress('action')) {
+    // Both Space (action) and Up (W / ↑) trigger interactions. In side-view,
+    // "up" is the canonical interact verb — pressing up while standing on a
+    // hotspot opens the door / talks to the NPC / examines evidence.
+    const interact = Input.consumePress('action') || Input.consumePress('up');
+    if (interact) {
       if (UI.isDialogOpen()) UI.hideDialog();
       else if (!UI.isAnyOverlayOpen()) this.useTool();
     }
@@ -214,65 +190,35 @@ export class Game {
       return;
     }
 
-    updatePlayer(s.player, s.world, dt);
+    const scene = getScene(s.sceneId);
+    updatePlayer(s.player, scene, dt);
     this.advanceTime(dt);
-    s.waterAnimT += dt;
 
     UI.updateHUD(s);
     if (s.flash > 0) s.flash -= dt * 2;
   }
 
   // ---------- Action / interact ----------
+  // Currently only door hotspots — dialog tree, evidence, gadgets land
+  // in subsequent PRs and slot in here.
 
   useTool() {
     const s = this.state;
-    const def = selectedDef(s.inventory);
-    const item = selectedItem(s.inventory);
-    const target = describeTargetAction(s.player, s.world, def, item);
+    const scene = getScene(s.sceneId);
+    const hotspot = hotspotInFront(s.player, scene);
     s.player.actionAnimT = 0.18;
-
-    switch (target.kind) {
-      case 'chop': {
-        const o = target.obj;
-        o.hp = (o.hp || 3) - 1;
-        Audio.chop();
-        this.spendEnergy(2);
-        if (o.hp <= 0) {
-          o.removed = true;
-          addItem(s.inventory, 'wood', 4);
-          UI.toast('+4 Madeira');
-        }
-        break;
-      }
-      case 'chopStump': {
-        target.obj.removed = true;
-        Audio.chop();
-        this.spendEnergy(1);
-        addItem(s.inventory, 'wood', 1);
-        UI.toast('+1 Madeira');
-        break;
-      }
-      case 'rock': {
-        const o = target.obj;
-        o.hp = (o.hp || 2) - 1;
-        Audio.rock();
-        this.spendEnergy(2);
-        if (o.hp <= 0) {
-          o.removed = true;
-          addItem(s.inventory, 'stone', 2);
-          UI.toast('+2 Pedra');
-        }
-        break;
-      }
-      case 'enter':
-        UI.toast('Porta trancada (em breve!)');
-        break;
-      case 'talk':
-        UI.showDialog(target.obj.name || 'Estranho', '...');
-        break;
-      default:
-        // No-op: nothing actionable in front of the player.
-        break;
+    if (!hotspot) {
+      // Nothing to interact with at the player's current position.
+      Audio.step();
+      return;
+    }
+    if (hotspot.action && hotspot.action.startsWith('enter:')) {
+      const target = hotspot.action.slice(6);
+      UI.toast(`Porta para "${target}" — em breve.`);
+    } else if (hotspot.action === 'talk') {
+      UI.showDialog(hotspot.label || '???', '...');
+    } else {
+      UI.toast(hotspot.label || 'Interagir');
     }
   }
 
@@ -280,178 +226,117 @@ export class Game {
 
   computeCamera() {
     const s = this.state;
-    const px = s.player.x + 12;
-    const py = s.player.y + 16;
+    const scene = getScene(s.sceneId);
+    const px = s.player.x + PLAYER_W / 2;
     let cx = px - CANVAS_W / 2;
-    let cy = py - CANVAS_H / 2;
-    const maxX = s.world.width * TILE - CANVAS_W;
-    const maxY = s.world.height * TILE - CANVAS_H;
-    cx = Math.max(0, Math.min(maxX, cx));
-    cy = Math.max(0, Math.min(maxY, cy));
+    cx = Math.max(0, Math.min(scene.width - CANVAS_W, cx));
     this._cameraX = Math.floor(cx);
-    this._cameraY = Math.floor(cy);
   }
 
   render() {
     const s = this.state;
     const ctx = this.ctx;
-    ctx.fillStyle = '#0d100b';
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    const scene = getScene(s.sceneId);
+
     this.computeCamera();
-    const cx = this._cameraX, cy = this._cameraY;
+    const cx = this._cameraX;
 
-    const x0 = Math.max(0, Math.floor(cx / TILE));
-    const y0 = Math.max(0, Math.floor(cy / TILE));
-    const x1 = Math.min(s.world.width - 1, Math.ceil((cx + CANVAS_W) / TILE));
-    const y1 = Math.min(s.world.height - 1, Math.ceil((cy + CANVAS_H) / TILE));
+    // Solid backstop in case any layer doesn't fully cover the canvas.
+    ctx.fillStyle = PALETTE.sky[0];
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-    const waterFrame = ((Math.floor(s.waterAnimT * 4) % 4) + 4) % 4;
-    for (let ty = y0; ty <= y1; ty++) {
-      for (let tx = x0; tx <= x1; tx++) {
-        this.drawTile(tx, ty, cx, cy, waterFrame);
-      }
+    // Pass 1: parallax background layers (sky → far → mid → street).
+    // Foreground layer (parallax > 1.0) is drawn after the player.
+    for (const layer of scene.layers) {
+      if (layer.parallax > 1.0) continue;
+      this.drawLayer(layer, cx);
     }
 
-    // Pass 2: objects + player, sorted by Y for pseudo-depth.
-    const drawables = [];
-    drawables.push({ y: s.player.y + 32, draw: () => this.drawPlayer(cx, cy) });
-    for (const o of s.world.objects) {
-      if (o.removed) continue;
-      if (o.x < x0 - 1 || o.x > x1 + 1 || o.y < y0 - 2 || o.y > y1 + 1) continue;
-      drawables.push({ y: o.y * TILE + TILE, draw: () => this.drawObject(o, cx, cy) });
+    // Pass 2: NPCs (drawn at scene scroll factor 1.0)
+    for (const npc of scene.npcs || []) {
+      this.drawNPC(npc, cx);
     }
-    drawables.sort((a, b) => a.y - b.y);
-    for (const d of drawables) d.draw();
 
-    // Pass 3: action target highlight + label
+    // Pass 3: player
+    this.drawPlayer(cx);
+
+    // Pass 4: foreground layers (parallax > 1.0, drawn over player for depth).
+    for (const layer of scene.layers) {
+      if (layer.parallax <= 1.0) continue;
+      this.drawLayer(layer, cx);
+    }
+
+    // Pass 5: hotspot prompt
     if (!UI.isAnyOverlayOpen()) {
-      const def = selectedDef(s.inventory);
-      const item = selectedItem(s.inventory);
-      const target = describeTargetAction(s.player, s.world, def, item);
-      if (target.kind !== 'none') {
-        const tx = target.tx, ty = target.ty;
-        ctx.strokeStyle = 'rgba(255, 230, 100, 0.95)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(tx * TILE - cx + 1, ty * TILE - cy + 1, TILE - 2, TILE - 2);
-        const label = ACTION_LABELS[target.kind];
-        if (label) {
-          ctx.font = 'bold 12px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          const lx = tx * TILE - cx + TILE / 2;
-          const ly = ty * TILE - cy - 10;
-          const w = ctx.measureText(label).width + 10;
-          ctx.fillStyle = 'rgba(35, 26, 16, 0.85)';
-          ctx.fillRect(lx - w / 2, ly - 9, w, 18);
-          ctx.fillStyle = '#ffe69b';
-          ctx.fillText(label, lx, ly);
-        }
+      const hs = hotspotInFront(s.player, scene);
+      if (hs) {
+        const lx = s.player.x + PLAYER_W / 2 - cx;
+        const ly = scene.groundY - PLAYER_H - 22;
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const label = `[↑] ${hs.label}`;
+        const w = ctx.measureText(label).width + 12;
+        ctx.fillStyle = 'rgba(15, 10, 25, 0.85)';
+        ctx.fillRect(lx - w / 2, ly - 10, w, 20);
+        ctx.strokeStyle = PALETTE.neonAmber;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(lx - w / 2 + 0.5, ly - 9.5, w - 1, 19);
+        ctx.fillStyle = PALETTE.neonAmber;
+        ctx.fillText(label, lx, ly);
       }
     }
 
-    // Pass 4: lighting / day-night tint
-    this.drawLighting();
+    // Pass 6: ambient tint (cheap noir overlay; PR #6 swaps for real lights).
+    if (scene.ambient && scene.ambient.tint) {
+      ctx.fillStyle = scene.ambient.tint;
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    }
 
-    // Pass 5: flash
+    // Pass 7: scene-transition flash
     if (s.flash > 0) {
       ctx.fillStyle = `rgba(0,0,0,${Math.min(1, s.flash)})`;
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     }
   }
 
-  drawTile(tx, ty, cx, cy, waterFrame) {
-    const s = this.state;
-    const t = tileAt(s.world, tx, ty);
-    const dx = tx * TILE - cx;
-    const dy = ty * TILE - cy;
-    const ctx = this.ctx;
-    let img;
-    switch (t) {
-      case T.GRASS: img = SPR.grass[(tx * 7 + ty * 13) % 4]; break;
-      case T.PATH: img = SPR.path; break;
-      case T.WATER: img = SPR.water[waterFrame]; break;
-      case T.STONE_FLOOR: img = SPR.stoneFloor; break;
-      case T.WOOD_FLOOR: img = SPR.wood; break;
-      case T.FENCE: img = SPR.fence; break;
-      case T.WALL: img = SPR.wall; break;
-      case T.BUILDING_ROOF: img = SPR.buildingRoof; break;
-      case T.BUILDING_DOOR: img = SPR.door; break;
-      default: img = SPR.grass[0];
-    }
-    if (!img) img = SPR.grass[0];
-    ctx.drawImage(img, dx, dy);
+  drawLayer(layer, cameraX) {
+    const img = layer.get();
+    if (!img) return;
+    const offset = -Math.floor(cameraX * layer.parallax);
+    this.ctx.drawImage(img, offset, 0);
   }
 
-  drawObject(o, cx, cy) {
+  drawNPC(npc, cameraX) {
+    // Placeholder. Real NPC sprites + dialog hooks land with the dialog-tree PR.
     const ctx = this.ctx;
-    const dx = o.x * TILE - cx;
-    const dy = o.y * TILE - cy;
-    if (o.type === 'tree') {
-      ctx.drawImage(SPR.tree, dx - TILE / 2, dy - TILE * 2);
-    } else if (o.type === 'stump') {
-      ctx.drawImage(SPR.stump, dx, dy);
-    } else if (o.type === 'rock') {
-      ctx.drawImage(SPR.rock, dx, dy);
-    } else if (o.type === 'npc') {
-      ctx.drawImage(SPR.npc, dx + 4, dy);
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      const w = ctx.measureText(o.name).width + 8;
-      ctx.fillRect(dx + 16 - w / 2, dy - 14, w, 12);
-      ctx.fillStyle = '#ffe7ad';
-      ctx.font = '10px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(o.name, dx + 16, dy - 8);
-    }
+    const dx = Math.floor(npc.x - cameraX);
+    const dy = (npc.y || 0);
+    ctx.fillStyle = '#3a3a44';
+    ctx.fillRect(dx, dy, PLAYER_W, PLAYER_H);
   }
 
-  drawPlayer(cx, cy) {
+  drawPlayer(cameraX) {
     const s = this.state;
     const p = s.player;
-    const dx = Math.floor(p.x - cx);
-    const dy = Math.floor(p.y - cy);
-    this.ctx.save();
-    this.ctx.fillStyle = 'rgba(0,0,0,0.32)';
-    this.ctx.beginPath();
-    this.ctx.ellipse(dx + 12, dy + 31, 9, 3, 0, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.ctx.restore();
-    const frames = SPR.player[p.dir];
-    const fi = p.moving ? p.animFrame : 0;
-    this.ctx.drawImage(frames[fi], dx, dy);
-
-    // Tool swing arc — kept as a generic "did something" feedback hook.
-    if (p.actionAnimT > 0) {
-      const t = 1 - (p.actionAnimT / 0.18);
-      const arc = Math.sin(t * Math.PI);
-      this.ctx.fillStyle = '#ffd34d';
-      let ax = dx + 12, ay = dy + 16;
-      if (p.dir === 'up') ay -= 14 * arc;
-      else if (p.dir === 'down') ay += 14 * arc;
-      else if (p.dir === 'left') ax -= 14 * arc;
-      else if (p.dir === 'right') ax += 14 * arc;
-      this.ctx.fillRect(ax - 2, ay - 2, 4, 4);
-    }
-  }
-
-  drawLighting() {
-    const s = this.state;
+    const dx = Math.floor(p.x - cameraX);
+    const dy = Math.floor(p.y);
     const ctx = this.ctx;
-    // 0 (full day) at 8:00, 1 (full night) at 22:00; partial in between.
-    const totalMin = s.hour * 60 + s.minute;
-    const sunrise = 6 * 60, dayBright = 8 * 60, dusk = 19 * 60, fullDark = 22 * 60;
-    let darkness;
-    if (totalMin <= sunrise) darkness = 0.30;
-    else if (totalMin <= dayBright) darkness = lerp(0.30, 0, (totalMin - sunrise) / (dayBright - sunrise));
-    else if (totalMin <= dusk) darkness = 0;
-    else if (totalMin <= fullDark) darkness = lerp(0, 0.55, (totalMin - dusk) / (fullDark - dusk));
-    else darkness = 0.55 + Math.min(0.15, (totalMin - fullDark) / (60 * 4) * 0.15);
 
-    if (darkness > 0.001) {
-      ctx.fillStyle = `rgba(20, 30, 80, ${darkness})`;
-      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    // pick frame
+    let img;
+    if (p.moving) img = SPR.player.walk[p.animFrame];
+    else img = SPR.player.idle[Math.floor((Date.now() / 600) % 2)];
+    if (!img) return;
+
+    if (p.dir === 'left') {
+      ctx.save();
+      ctx.translate(dx + PLAYER_W, dy);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0);
+      ctx.restore();
+    } else {
+      ctx.drawImage(img, dx, dy);
     }
   }
 }
-
-function lerp(a, b, t) { return a + (b - a) * Math.max(0, Math.min(1, t)); }

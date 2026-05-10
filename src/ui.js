@@ -25,7 +25,7 @@ export function toast(msg) {
 export function updateHUD(state) {
   const hh = String(state.hour).padStart(2, '0');
   const mm = String(Math.floor(state.minute / 10) * 10).padStart(2, '0');
-  $('#clock').textContent = `Dia ${state.day} — ${hh}:${mm}`;
+  $('#clock').textContent = `Noite ${state.day} — ${hh}:${mm}`;
   $('#money').textContent = `💰 ${state.money}g`;
 
   const e = $('#energy');

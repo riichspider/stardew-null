@@ -1,6 +1,7 @@
 // Boot.
 
 import { buildSprites } from './sprites.js';
+import { loadAssets } from './assets.js';
 import { Audio } from './audio.js';
 import { Game, createInitialState, loadStateFromSave } from './game.js';
 import { hasSave } from './save.js';
@@ -10,6 +11,14 @@ const canvas = document.getElementById('game');
 canvas.focus();
 
 buildSprites();
+
+// Procedural sprites are ready immediately; in parallel we try to load any
+// hand-drawn PNGs declared in the asset manifest. Missing PNGs are silently
+// skipped — the engine falls through to procedural fallbacks.
+loadAssets().then((res) => {
+  if (res.loaded > 0) console.info(`Assets carregados: ${res.loaded}/${res.total}`);
+});
+
 const game = new Game(canvas);
 
 // Title buttons
