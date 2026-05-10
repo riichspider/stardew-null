@@ -175,9 +175,9 @@ export class Cutscene {
       this.shotIndex++;
       this.shotT = 0;
       if (this.shotIndex >= this._shots.length) {
-        // Natural completion. Drive a brief fade-out before signalling
-        // complete so the caller sees a clean handoff.
         this.done = true;
+        const lastShotIndex = this._shots.length - 1;
+        const lastShotDur = this._shots[lastShotIndex].dur;
         const ctx = this.ctx;
         let t = 0;
         let last = performance.now();
@@ -186,7 +186,8 @@ export class Cutscene {
           last = now;
           t += ddt;
           const a = Math.min(1, t / FADE_OUT_S);
-          // Keep drawing the last frame while fading
+          this.shotIndex = lastShotIndex;
+          this.shotT = lastShotDur;
           this._drawCurrentFrame(0);
           drawFade(ctx, a);
           if (a < 1) requestAnimationFrame(fadeLoop);
