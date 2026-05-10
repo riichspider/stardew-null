@@ -77,6 +77,9 @@ export function startDialog(treeId, state) {
 }
 
 export function selectChoice(choice, state) {
+  if (choice.requiresEvidence && !isDialogUnlocked(choice.requiresEvidence)) {
+    return null;
+  }
   if (choice.setFlag) {
     setFlag(choice.setFlag, true);
   }

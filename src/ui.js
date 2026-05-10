@@ -7,9 +7,9 @@
 import { ITEMS } from './items.js';
 import { Audio } from './audio.js';
 import { HOTBAR_SIZE } from './inventory.js';
-import { EVIDENCE, getAvailableCombinations, tryCombineEvidence } from './evidence.js';
+import { EVIDENCE, getAvailableCombinations, tryCombineEvidence, isDialogUnlocked } from './evidence.js';
 import { saveGame, setFlag } from './save.js';
-import { getDialog, advanceNode, DIALOGS } from './dialogs.js';
+import { getDialog, advanceNode, getAvailableChoices, DIALOGS } from './dialogs.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -112,10 +112,10 @@ function renderDialogNode(node) {
   const oldChoices = el.querySelectorAll('.dialog-choice');
   oldChoices.forEach(c => c.remove());
   
-  // Show choices or hint
-  const choices = node.choices || [];
+  // Show only choices whose evidence requirements are met
+  const choices = getAvailableChoices(node, _dialogState);
   if (choices.length > 0) {
-    hintEl.textContent = ''; // Remove hint when there are choices
+    hintEl.textContent = '';
     choices.forEach((choice, i) => {
       const btn = document.createElement('button');
       btn.className = 'dialog-choice';
@@ -132,8 +132,8 @@ function renderDialogNode(node) {
 
 function handleChoice(choice) {
   if (!_currentDialog) return;
-  
-  // Apply choice effects
+  if (choice.requiresEvidence && !isDialogUnlocked(choice.requiresEvidence)) return;
+
   if (choice.setFlag) {
     setFlag(choice.setFlag, true);
   }
