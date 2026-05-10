@@ -1,15 +1,19 @@
 // localStorage save/load.
 //
-// Save key bumped to v2 with the farming gut so older v1 farming saves don't
-// get half-loaded into the engine-only state shape.
+// Save key bumped to v3 with the side-view pivot. v2 saves serialised the
+// old top-down tile world; the new format only persists scene id + player
+// position because the scene definition itself is code-driven.
 
-const KEY = 'stardew-null:save:v2';
+const KEY = 'stardew-null:save:v3';
 
 export function saveGame(state) {
   try {
     const payload = {
-      version: 2,
+      version: 3,
       ts: Date.now(),
+      sceneId: state.sceneId,
+      playerX: state.player.x,
+      playerDir: state.player.dir,
       money: state.money,
       energy: state.energy,
       energyMax: state.energyMax,
@@ -17,9 +21,6 @@ export function saveGame(state) {
       hour: state.hour,
       minute: state.minute,
       inventory: state.inventory,
-      player: { x: state.player.x, y: state.player.y, dir: state.player.dir },
-      tiles: Array.from(state.world.tiles),
-      objects: state.world.objects,
     };
     localStorage.setItem(KEY, JSON.stringify(payload));
     return true;
