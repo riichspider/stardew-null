@@ -12,7 +12,7 @@ import { createPlayer, updatePlayer, hotspotInFront } from './player.js';
 import { createInventory, addItem } from './inventory.js';
 import * as UI from './ui.js';
 import { saveGame, loadGame, setFlag } from './save.js';
-import { applyLighting } from './lighting.js';
+import { applyLighting, clearRainPools } from './lighting.js';
 import { collectEvidence, EVIDENCE } from './evidence.js';
 import { getDialog, startDialog, getAvailableChoices, selectChoice } from './dialogs.js';
 import { useGadget, selectedIsGadget } from './gadgets.js';
@@ -322,6 +322,8 @@ export class Game {
 
   changeScene(targetSceneId, spawn = 'default') {
     if (this._transition) return; // already transitioning
+    // Clear rain pools when changing scenes to avoid stale particles
+    clearRainPools();
     // Validate target up-front so we surface bad scene IDs immediately
     // instead of crashing mid-fade.
     getScene(targetSceneId);

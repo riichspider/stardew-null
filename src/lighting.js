@@ -37,7 +37,7 @@ function mulberry32(seed) {
 const _rainPools = new Map();
 
 function getRainPool(sceneId, density, speed, length, seed) {
-  const key = `${sceneId}:${density}:${speed}:${length}`;
+  const key = `${sceneId}:${density}:${speed}:${length}:${seed}`;
   if (_rainPools.has(key)) return _rainPools.get(key);
 
   const rng = mulberry32(seed);
@@ -57,6 +57,11 @@ function getRainPool(sceneId, density, speed, length, seed) {
   const entry = { pool, rng };
   _rainPools.set(key, entry);
   return entry;
+}
+
+// Clear rain pools when scene changes to avoid stale particle positions
+export function clearRainPools() {
+  _rainPools.clear();
 }
 
 function drawRain(ctx, scene, dt) {

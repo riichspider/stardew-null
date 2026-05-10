@@ -61,23 +61,33 @@ export function clearSave() {
 // Cross-save persistent flags (e.g. cutsceneSeen) live in their own key so
 // they survive a `clearSave()`. The shape is { cutsceneSeen, ... } and is
 // extended by future PRs for world flags from dialog choices.
+//
+// Cache flags in memory to avoid excessive localStorage I/O
+let _flagsCache = null;
+
+// Load flags into cache on first access
+function _ensureFlags() {
+  if (_flagsCache === null) {
+    try {
+      const raw = localStorage.getItem(FLAGS_KEY);
+      if (raw) {
+        const obj = JSON.parse(raw);
+        if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+          _flagsCache = obj;
+        }
+      }
+    } catch (e) { /* ignore */ }
+    if (_flagsCache === null) _flagsCache = {};
+  }
+  return _flagsCache;
+}
 
 function _readFlags() {
-  try {
-    const raw = localStorage.getItem(FLAGS_KEY);
-    if (!raw) return {};
-    const obj = JSON.parse(raw);
-    // Reject non-plain-objects (arrays, primitives, null) so a malformed
-    // value can't make `setFlag()` mutate-and-rewrite something that
-    // `getFlag()` would then misread.
-    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
-    return obj;
-  } catch (e) {
-    return {};
-  }
+  return _ensureFlags();
 }
 
 function _writeFlags(obj) {
+  _flagsCache = obj; // Update cache
   try {
     localStorage.setItem(FLAGS_KEY, JSON.stringify(obj));
     return true;
@@ -85,6 +95,11 @@ function _writeFlags(obj) {
     console.error('flags write error', e);
     return false;
   }
+}
+
+// Clear the cache to force re-read from localStorage
+export function clearFlagCache() {
+  _flagsCache = null;
 }
 
 export function getFlag(key, fallback = false) {

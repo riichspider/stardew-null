@@ -53,6 +53,7 @@ export class Cutscene {
     this.shotT = 0;
     this.totalT = 0;
     this.done = false;
+    this._completing = false;
     this.skipped = false;
 
     this._listeners = { complete: [] };
@@ -175,6 +176,9 @@ export class Cutscene {
       this.shotIndex++;
       this.shotT = 0;
       if (this.shotIndex >= this._shots.length) {
+        // Prevent race condition: don't allow multiple completions
+        if (this._completing) return;
+        this._completing = true;
         this.done = true;
         const lastShotIndex = this._shots.length - 1;
         const lastShotDur = this._shots[lastShotIndex].dur;
