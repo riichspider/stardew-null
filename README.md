@@ -1,82 +1,92 @@
-# Stardew Null
+# Pixel Engine — Noir (ex-Stardew Null)
 
-Um mini-jogo de fazenda inspirado em Stardew Valley, feito em **JavaScript puro** (sem frameworks, sem bundlers, sem assets externos). Tudo é desenhado proceduralmente em canvas — incluindo sprites, áudio e o mapa do mundo.
+Esqueleto de **RPG noir de investigação side-view** em JavaScript puro (sem frameworks, sem bundlers). Inspirado em Blade Runner / Backbone — pixel art usada para iluminação cinemática, foco em diálogo dinâmico e investigação.
+
+Tudo é desenhado proceduralmente em canvas (sprites, áudio, cenas). PNGs hand-drawn opcionais podem ser dropados em `assets/` e o motor os usa no lugar dos procedurais — veja `assets/README.md`.
 
 > Demo ao vivo: https://stardew-clone-rfhmzkbr.devinapps.com
 
-## Como jogar
+## Histórico
 
-Qualquer servidor estático moderno serve. Não há build step, dependências ou bundler.
+Originalmente um clone mini de Stardew Valley (PR #1). Depois cleanup técnico (PR #3 — `config.js`, fix de path bloqueado, scripts npm). Depois gut completo de fazenda → engine genérica (PR #4). Agora pivotou para side-view noir (este PR).
+
+## Status atual
+
+**Funcional hoje**
+
+- Renderização side-view com câmera horizontal e parallax em 5 camadas (sky → far skyline → mid buildings → street → foreground)
+- Detetive side-profile com fedora + sobretudo + cigarro aceso (procedural, 24×32, 2 idle + 4 walk frames; flip horizontal para left-facing)
+- Cena `street01` (2400 px de largura) com hotspots placeholder (porta de prédio, porta de bar)
+- Movimento horizontal com clamp em walkable bounds; câmera seguindo player com clamp em `[0, sceneWidth - canvasW]`
+- HUD: relógio (`Noite N — HH:MM`), dinheiro, barra de energia, hotbar
+- Inventário, diálogo overlay, title screen — todos os overlays do gut
+- Save/load automático em localStorage (`stardew-null:save:v3` — bumpou da v2 do gut)
+- Asset loader (`src/assets.js`) que tenta carregar PNGs declarados no manifest e cai pro procedural quando ausente
+- SFX WebAudio procedurais (framework, sem cues específicas ainda)
+
+**A construir (PRs futuros, ordem provisória)**
+
+- **PR #6** — lighting cinemático noir: chuva animada, neon piscando, point lights nos postes, fog volumétrico
+- **PR #7** — sistema de cenas com transições (fade in/out entre `street01` → `apartment` → `bar`)
+- **PR #8** — árvore de diálogo com escolhas que setam flags de mundo
+- **PR #9** — expansão do case file (novas pistas e combinações avançadas de evidências)
+- **PR #10** — gadgets (lanterna UV, scanner, gravador, taser) + ação de investigar
+- **PR #11** — combate em tempo real (mira + uso de gadgets)
+
+## Como rodar
+
+Qualquer servidor estático moderno serve. Sem build step.
 
 ```bash
-# Opção rápida (precisa de Python 3 instalado):
-npm start            # equivalente a: python3 -m http.server 5173
-# ou diretamente:
-python3 -m http.server 5173
+npm start              # equivalente a: python3 -m http.server 5173
 ```
 
 Depois abra http://localhost:5173/.
 
 ```bash
-npm run lint         # checa sintaxe de todos os módulos com `node --check`
+npm run lint           # checa sintaxe de todos os módulos com `node --check`
 ```
 
 ### Controles
 
 | Tecla | Ação |
 |------:|:-----|
-| `WASD` / setas | andar |
-| `Espaço` | usar ferramenta · interagir · avançar diálogo |
+| `A`/`D` ou `←`/`→` | andar pela rua (esquerda/direita) |
+| `W`/`↑` | interagir com hotspot (porta, NPC, evidência) |
+| `Espaço` | interagir · avançar diálogo |
 | `1`–`9` | selecionar slot da hotbar |
 | `I` | abrir inventário |
 | `ESC` | fechar menu |
-
-## Mecânicas implementadas
-
-- Mapa tile-based (50×32 tiles) com casa, loja, lago, floresta e fazenda
-- Movimento 4-direcional com animação de caminhada
-- Ferramentas: enxada, regador, machado, picareta, foice
-- Cultivos: arar → plantar semente → regar → colher
-- 7 culturas com estágios visuais e estações próprias (pastinaca, batata, couve-flor, melão, tomate, milho, abóbora)
-- Regrow para tomate e milho
-- Árvores corta-com-machado (3 acertos → 4 madeiras), pedras quebráveis (2 acertos → 2 pedras)
-- Mato e tufos cortáveis com a foice (dropam fibra/feno)
-- Inventário + hotbar com 27 slots, equipar com clique
-- Loja com NPC (Pierre): comprar sementes da estação, vender colheitas
-- Energia (gasta a cada ação) e desmaio se zerar / passar das 02h
-- Ciclo dia/noite com tinta noturna progressiva
-- Estações de 28 dias (primavera → verão → outono → inverno → ano+1)
-- Save/load automático ao dormir (localStorage)
-- HUD: relógio, dinheiro, energia, hotbar, clima
-- SFX procedurais via WebAudio (sem assets externos)
 
 ## Arquitetura
 
 ```
 stardew-clone/
-├── index.html        # canvas + overlays HTML
-├── styles.css        # HUD, menus
+├── index.html         # canvas + overlays HTML (HUD, dialog, inventory, title)
+├── styles.css         # estilo dos overlays
+├── assets/            # PNGs hand-drawn opcionais (procedural fallback se vazio)
+│   └── README.md      # convenções de slot, paleta, dimensões
 └── src/
-    ├── main.js       # boot
-    ├── config.js     # constantes de balance (mundo, tempo, energia, dinheiro)
-    ├── game.js       # game loop + render
-    ├── world.js      # mapa, tiles, objetos
-    ├── player.js     # movimento, animação, mira
-    ├── sprites.js    # sprites pixel-art proceduriais
-    ├── items.js      # registro de itens
-    ├── crops.js      # definições de cultivos
-    ├── inventory.js  # hotbar + bag
-    ├── ui.js         # HUD, diálogo, loja, inventário, sleep
-    ├── audio.js      # SFX WebAudio
-    ├── input.js      # teclado
-    └── save.js       # localStorage
+    ├── main.js        # boot (buildSprites + loadAssets em paralelo)
+    ├── config.js      # constantes de balance + paleta noir
+    ├── game.js        # loop, update, render side-view, save/load orchestration
+    ├── scenes.js      # registry de cenas
+    ├── scenes/
+    │   └── street01.js  # primeira cena noir (rua, prédios, hotspots)
+    ├── player.js      # movimento horizontal 2-direção, hotspot picking
+    ├── sprites.js     # geradores procedurais (detetive, sky, prédios, calçada, fg)
+    ├── assets.js      # loader de PNGs com fallback
+    ├── items.js       # registro de itens (vazio até gadgets entrarem)
+    ├── inventory.js   # hotbar + bag
+    ├── ui.js          # HUD, diálogo, inventário, title
+    ├── audio.js       # SFX WebAudio
+    ├── input.js       # teclado
+    └── save.js        # localStorage v3
 ```
 
-Para balancear o jogo (tamanho do mundo, duração do dia, energia inicial, dinheiro inicial, etc.) edite **`src/config.js`** — é o ponto único de tuning.
+Para mudar paleta, dimensões da cena, velocidade do player, duração do dia, etc., edite **`src/config.js`** — é o ponto único de tuning.
 
-## Limitações conhecidas
-
-Esse é um demo de uma sessão de algumas horas — **muito** menor que o Stardew Valley original (~5 anos de dev). Faltam: combate, mina, pesca, casamento, festivais, animais, interior da casa, multiplayer, balanceamento, e arte feita à mão. Mas o loop básico de fazenda funciona.
+Para adicionar uma nova cena: criar `src/scenes/<id>.js` com width/groundY/walkable/layers/hotspots, registrar em `src/scenes.js`, e (opcional) dropar PNGs em `assets/scenes/<id>/` seguindo a convenção em `assets/README.md`.
 
 ## Licença
 

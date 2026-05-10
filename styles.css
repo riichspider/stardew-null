@@ -55,6 +55,10 @@ html, body {
   font-size: 14px;
 }
 
+#hud.cutscene-hidden {
+  display: none;
+}
+
 .hud-top, .hud-bottom {
   display: flex;
   align-items: center;
@@ -164,7 +168,7 @@ html, body {
 }
 .overlay.hidden { display: none; }
 
-.dialog-box, .shop-box, .inv-box, .title-box {
+.dialog-box, .inv-box, .title-box {
   background: linear-gradient(180deg, #f8eccc, #e1c98c);
   color: #1f1a14;
   border: 4px solid #4d2b1a;
@@ -176,7 +180,7 @@ html, body {
 }
 .dialog-box { min-width: 360px; }
 
-#dialog-name, .shop-header, .inv-header, #sleep-name {
+#dialog-name, .inv-header {
   font-weight: 700;
   font-size: 18px;
   border-bottom: 2px solid #4d2b1a;
@@ -186,7 +190,7 @@ html, body {
   justify-content: space-between;
   gap: 16px;
 }
-#dialog-text, #sleep-text {
+#dialog-text {
   min-height: 60px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -201,27 +205,27 @@ html, body {
   justify-content: flex-end;
 }
 
-/* Shop */
-.shop-tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-.shop-tabs button {
-  flex: 1;
-  padding: 6px 10px;
+/* Dialog choices */
+#dialog .dialog-choice {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #e1c98c;
   border: 2px solid #4d2b1a;
-  background: #d8b97a;
-  color: #1f1a14;
-  font-weight: 700;
-  cursor: pointer;
   border-radius: 4px;
+  color: #1f1a14;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
 }
-.shop-tabs button.active {
-  background: #4d2b1a;
-  color: #f8eccc;
+#dialog .dialog-choice:hover {
+  background: #f8eccc;
+  border-color: #6a3d24;
 }
-#shop-items, #inv-grid {
+
+/* Inventory grid (shop overlay was removed with the farming gut) */
+#inv-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 6px;
@@ -229,7 +233,7 @@ html, body {
   overflow-y: auto;
   padding-right: 4px;
 }
-.shop-item, .inv-item {
+.inv-item {
   background: #f0d9a4;
   border: 2px solid #4d2b1a;
   border-radius: 4px;
@@ -240,8 +244,8 @@ html, body {
   cursor: pointer;
   font-size: 13px;
 }
-.shop-item:hover, .inv-item:hover { background: #ffe7ad; }
-.shop-item .icon, .inv-item .icon {
+.inv-item:hover { background: #ffe7ad; }
+.inv-item .icon {
   font-size: 20px;
   width: 26px;
   height: 26px;
@@ -249,22 +253,35 @@ html, body {
   align-items: center;
   justify-content: center;
 }
-.shop-item .meta, .inv-item .meta {
+.inv-item .meta {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-width: 0;
 }
-.shop-item .name, .inv-item .name {
+.inv-item .name {
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.shop-item .price { font-size: 11px; color: #4d2b1a; }
 .inv-item .qty { font-size: 11px; color: #4d2b1a; }
 .inv-item.equipped { box-shadow: inset 0 0 0 2px #ffd34d; }
-.shop-hint, .inv-hint {
+.inv-item.combine-source { box-shadow: inset 0 0 0 3px #ff6b6b; background: #ffcccc; }
+.evidence-desc {
+  font-size: 10px;
+  color: #4d2b1a;
+  margin-top: 2px;
+  display: none;
+}
+.inv-item:hover .evidence-desc { display: block; }
+.inv-info {
+  font-size: 12px;
+  color: #c8403a;
+  margin-top: 8px;
+  min-height: 18px;
+}
+.inv-hint {
   text-align: right;
   font-size: 11px;
   color: #4d2b1a;
@@ -355,4 +372,40 @@ html, body {
 @media (max-width: 720px) {
   .controls ul { font-size: 12px; }
   .title-box h1 { font-size: 32px; }
+}
+
+/* Evidence detail modal */
+#evidence-detail {
+  z-index: 50;
+}
+#evidence-detail .evidence-detail-box {
+  background: linear-gradient(180deg, #f8eccc, #e1c98c);
+  color: #1f1a14;
+  border: 4px solid #4d2b1a;
+  border-radius: 8px;
+  padding: 24px 32px;
+  min-width: 280px;
+  max-width: min(400px, 80vw);
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+}
+#evidence-detail .detail-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+#evidence-detail .detail-name {
+  font-weight: 700;
+  font-size: 18px;
+  margin-bottom: 12px;
+  color: #4d2b1a;
+}
+#evidence-detail .detail-desc {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1f1a14;
+}
+#evidence-detail .detail-hint {
+  margin-top: 16px;
+  font-size: 11px;
+  color: #4d2b1a;
 }

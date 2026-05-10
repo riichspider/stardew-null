@@ -1,110 +1,81 @@
-// Game orchestrator: state, update, render.
+// Game orchestrator: state, update, side-view scene render.
+//
+// The world is now a registry of side-view scenes (see `src/scenes.js`),
+// not a top-down tile grid. Each scene is a horizontally-scrolling corridor
+// with parallax background layers, walkable bounds, and hotspots.
 
 import { Input } from './input.js';
 import { Audio } from './audio.js';
-import { TILE, SPR, drawCrop } from './sprites.js';
-import { createWorld, tileAt, setTile, T, objectAt, isPassable, endOfDay } from './world.js';
-import { CROPS, getCrop } from './crops.js';
-import { ITEMS } from './items.js';
-import { createPlayer, updatePlayer, tileInFront, describeTargetAction, playerTile } from './player.js';
-import { createInventory, addItem, selectedDef, selectedItem, removeFromSlot } from './inventory.js';
+import { SPR, PLAYER_W, PLAYER_H } from './sprites.js';
+import { getScene } from './scenes.js';
+import { createPlayer, updatePlayer, hotspotInFront } from './player.js';
+import { createInventory, addItem } from './inventory.js';
 import * as UI from './ui.js';
-import { saveGame, loadGame, hasSave, clearSave } from './save.js';
+import { saveGame, loadGame, setFlag } from './save.js';
+import { applyLighting } from './lighting.js';
+import { collectEvidence, EVIDENCE } from './evidence.js';
+import { getDialog, startDialog, getAvailableChoices, selectChoice } from './dialogs.js';
+import { useGadget, selectedIsGadget } from './gadgets.js';
 import {
   CANVAS_W, CANVAS_H,
   REAL_SECONDS_PER_GAME_MIN,
-  DAY_START_HOUR, DAY_FAINT_HOUR, SEASON_LENGTH_DAYS, SEASONS,
+  DAY_START_HOUR, DAY_FAINT_HOUR,
   STARTING_MONEY, ENERGY_MAX, FAINT_ENERGY_RATIO,
+  DEFAULT_SCENE,
+  PALETTE,
 } from './config.js';
-
-// ---------------- Constants ----------------
-
-const VIEW_W_TILES = CANVAS_W / TILE; // 30
-const VIEW_H_TILES = CANVAS_H / TILE; // 20
-
-const ACTION_LABELS = {
-  till: 'Arar',
-  untill: 'Desfazer',
-  plant: 'Plantar',
-  fill: 'Encher',
-  water: 'Regar',
-  chop: 'Cortar',
-  chopStump: 'Cortar toco',
-  rock: 'Quebrar',
-  cut: 'Ceifar',
-  harvest: 'Colher',
-  shop: 'Loja',
-  enter: 'Entrar',
-  sleep: 'Dormir',
-  chest: 'Baú',
-  talk: 'Falar',
-};
 
 // ---------------- State factory ----------------
 
-export function createInitialState() {
-  const world = createWorld();
+export function createInitialState(sceneId = DEFAULT_SCENE) {
+  const scene = getScene(sceneId);
   const inv = createInventory();
-  // Starter loadout: tools in slots 0-4, parsnip seeds in 5
-  inv.slots[0] = { id: 'hoe',      qty: 1 };
-  inv.slots[1] = { id: 'watering', qty: 1, water: 0 };
-  inv.slots[2] = { id: 'axe',      qty: 1 };
-  inv.slots[3] = { id: 'pickaxe',  qty: 1 };
-  inv.slots[4] = { id: 'scythe',   qty: 1 };
-  addItem(inv, 'parsnip_seed', 8);
-  inv.selected = 0;
-
+  
+  // Give player starting gadgets
+  addItem(inv, 'gadget_lantern', 1);
+  addItem(inv, 'gadget_recorder', 1);
+  addItem(inv, 'gadget_scanner', 1);
+  addItem(inv, 'gadget_taser', 1);
+  
   return {
-    world,
+    sceneId,
     inventory: inv,
-    player: createPlayer(world.spawn),
+    player: createPlayer(scene),
     money: STARTING_MONEY,
     energy: ENERGY_MAX,
     energyMax: ENERGY_MAX,
     day: 1,
-    season: SEASONS[0],
-    year: 1,
     hour: DAY_START_HOUR,
     minute: 0,
-    weather: 'sun',
     timeAccum: 0,
     paused: false,
     fainted: false,
-    waterAnimT: 0,
-    flash: 0, // screen flash for transitions
+    flash: 0,
   };
 }
 
 export function loadStateFromSave() {
   const data = loadGame();
   if (!data) return null;
-  const world = createWorld(); // base
-  // Replace tiles + objects with saved
-  if (data.tiles) {
-    world.tiles = new Uint8Array(data.tiles);
-  }
-  if (Array.isArray(data.objects)) {
-    world.objects = data.objects;
-  }
+  const sceneId = data.sceneId || DEFAULT_SCENE;
+  const scene = getScene(sceneId);
+  const player = createPlayer(scene);
+  if (typeof data.playerX === 'number') player.x = data.playerX;
+  if (data.playerDir === 'left' || data.playerDir === 'right') player.dir = data.playerDir;
   return {
-    world,
+    sceneId,
     inventory: data.inventory,
-    player: createPlayer(world.spawn),
+    player,
     money: data.money,
     energy: data.energy,
     energyMax: data.energyMax,
     day: data.day,
-    season: data.season,
-    year: data.year,
     hour: data.hour,
     minute: data.minute,
-    weather: data.weather,
     timeAccum: 0,
     paused: false,
     fainted: false,
-    waterAnimT: 0,
     flash: 0,
-    _restorePlayer: data.player,
   };
 }
 
@@ -120,17 +91,17 @@ export class Game {
     this.running = false;
     this._raf = null;
     this._cameraX = 0;
-    this._cameraY = 0;
+    this._tSec = 0;        // wall-clock seconds since boot, for lighting flicker
+    this._lastDt = 0;
+    // Active scene-change transition (or null when not transitioning).
+    //   { phase: 'out'|'in', t: secondsElapsed, duration, target, spawn }
+    // Player input is frozen and a black overlay is drawn for the whole
+    // duration; the scene swap happens at the boundary between phases.
+    this._transition = null;
   }
 
   start(state) {
     this.state = state;
-    if (state._restorePlayer) {
-      state.player.x = state._restorePlayer.x;
-      state.player.y = state._restorePlayer.y;
-      state.player.dir = state._restorePlayer.dir;
-      delete state._restorePlayer;
-    }
     this.lastT = performance.now();
     this.running = true;
     cancelAnimationFrame(this._raf);
@@ -138,6 +109,8 @@ export class Game {
       if (!this.running) return;
       const dt = Math.max(0, Math.min(0.05, (t - this.lastT) / 1000));
       this.lastT = t;
+      this._tSec += dt;
+      this._lastDt = dt;
       this.update(dt);
       this.render();
       Input.endFrame();
@@ -164,14 +137,13 @@ export class Game {
       s.timeAccum -= whole * REAL_SECONDS_PER_GAME_MIN;
       s.minute += whole;
       while (s.minute >= 60) { s.minute -= 60; s.hour += 1; }
-      // pass out at DAY_FAINT_HOUR (default 02:00) if not slept
+      // Auto-recover at sunrise (placeholder until the safe-house mechanic
+      // replaces this in a later PR).
       if (s.hour >= DAY_FAINT_HOUR && !s.fainted) {
         s.fainted = true;
-        s.energy = Math.max(0, s.energy * 0.5);
         Audio.faint();
-        UI.toast('Você desmaiou! Acordou no dia seguinte.');
-        // simulate sleep transition
-        setTimeout(() => this.sleep(true), 600);
+        UI.toast('Você descansou. Acordou na noite seguinte.');
+        setTimeout(() => this.recoverDay(true), 600);
       }
     }
   }
@@ -180,50 +152,26 @@ export class Game {
     this.state.energy -= n;
     if (this.state.energy <= 0) {
       this.state.energy = 0;
-      // Force faint
       if (!this.state.fainted) {
         this.state.fainted = true;
         Audio.faint();
         UI.toast('Sem energia! Você desmaiou.');
-        setTimeout(() => this.sleep(true), 600);
+        setTimeout(() => this.recoverDay(true), 600);
       }
     }
   }
 
-  // ---------- Sleep / new day ----------
-
-  sleep(forced = false) {
+  recoverDay(forced = false) {
     const s = this.state;
     s.fainted = false;
-    // End-of-day world tick
-    endOfDay(s.world);
-    // Update crop readiness based on daysGrown
-    for (const o of s.world.objects) {
-      if (o.removed || o.type !== 'crop') continue;
-      const def = getCrop(o.cropId);
-      if ((o.daysGrown || 0) >= (def.stages - 1) * def.daysPerStage) {
-        o.ready = true;
-      }
-    }
     s.day += 1;
-    if (s.day > SEASON_LENGTH_DAYS) {
-      s.day = 1;
-      const idx = SEASONS.indexOf(s.season);
-      s.season = SEASONS[(idx + 1) % SEASONS.length];
-      if (s.season === SEASONS[0]) s.year += 1;
-    }
     s.hour = DAY_START_HOUR;
     s.minute = 0;
     s.energy = forced ? Math.round(s.energyMax * FAINT_ENERGY_RATIO) : s.energyMax;
     s.flash = 1.0;
     Audio.newDay();
-    // Move player back to the home spawn (path tile just south of the door)
-    const p = s.player;
-    p.x = s.world.spawn.x * TILE + 4;
-    p.y = s.world.spawn.y * TILE;
-    p.dir = 'down';
     saveGame(s);
-    UI.toast(`${seasonName(s.season)} ${s.day}, ano ${s.year}`);
+    UI.toast(`Noite ${s.day}`);
   }
 
   // ---------- Update ----------
@@ -232,32 +180,49 @@ export class Game {
     const s = this.state;
     if (UI.isTitleOpen()) return;
 
-    // Toggle inventory
     if (Input.consumePress('inventory')) {
       if (UI.isInventoryOpen()) UI.hideInventory();
       else if (!UI.isAnyOverlayOpen()) UI.showInventory(s);
     }
 
-    // ESC closes overlays
-    if (Input.consumePress('escape')) {
-      if (UI.isShopOpen()) UI.hideShop();
-      else if (UI.isInventoryOpen()) UI.hideInventory();
-      else if (UI.isSleepOpen()) UI.hideSleepMenu();
-      else if (UI.isDialogOpen()) UI.hideDialog();
-    }
-
-    // Action / interact
-    if (Input.consumePress('action')) {
-      if (UI.isDialogOpen()) UI.hideDialog();
-      else if (UI.isSleepOpen()) {
-        UI.hideSleepMenu();
-        this.sleep(false);
-      } else if (!UI.isAnyOverlayOpen()) {
-        this.useTool();
+    if (UI.isInventoryOpen() && Input.consumePress('action')) {
+      // In combine mode: attempt combine with selected slot
+      const cm = UI.getCombineMode && UI.getCombineMode();
+      if (cm && cm.slotA !== undefined) {
+        UI.attemptCombine(s);
       }
     }
 
-    // Hotbar selection
+    if (Input.consumePress('escape')) {
+      if (UI.isInventoryOpen()) UI.hideInventory();
+      else if (UI.isDialogOpen()) UI.hideDialog();
+    }
+
+    // Both Space (action) and Up (W / ↑) trigger interactions. In side-view,
+    // "up" is the canonical interact verb — pressing up while standing on a
+    // hotspot opens the door / talks to the NPC / examines evidence.
+    const interact = Input.consumePress('action') || Input.consumePress('up');
+    if (interact) {
+      if (UI.isDialogOpen()) UI.advanceOrCloseDialog();
+      else if (!UI.isAnyOverlayOpen()) {
+        // First check for hotspot/NPC interaction
+        const scene = getScene(s.sceneId);
+        const target = hotspotInFront(s.player, scene);
+        if (target) {
+          // Has interaction - useTool handles it
+          this.useTool();
+        } else {
+          // No interaction - try gadget
+          const gadget = selectedIsGadget(s);
+          if (gadget) {
+            useGadget(s, s.inventory.slots[s.inventory.selected].id);
+          } else {
+            Audio.step();
+          }
+        }
+      }
+    }
+
     const hb = Input.takeHotbarPress();
     if (hb >= 0 && !UI.isAnyOverlayOpen()) {
       s.inventory.selected = hb;
@@ -269,160 +234,136 @@ export class Game {
       return;
     }
 
-    updatePlayer(s.player, s.world, dt);
+    // While a transition is mid-fade, freeze the player and the clock so
+    // the world doesn't drift under the black overlay.
+    if (this._transition) {
+      this._advanceTransition(dt);
+      UI.updateHUD(s);
+      return;
+    }
+
+    const scene = getScene(s.sceneId);
+    updatePlayer(s.player, scene, dt);
     this.advanceTime(dt);
-    s.waterAnimT += dt;
 
     UI.updateHUD(s);
     if (s.flash > 0) s.flash -= dt * 2;
   }
 
-  // ---------- Tool use ----------
+  // ---------- Action / interact ----------
+  // Door hotspots with `{ goto, spawn }` actions trigger a scene change.
+  // String actions ("enter:bar", "examine:desk", etc.) are surfaced as
+  // placeholder toasts until evidence/dialog/gadget PRs wire them up.
 
   useTool() {
     const s = this.state;
-    const def = selectedDef(s.inventory);
-    const item = selectedItem(s.inventory);
-    const target = describeTargetAction(s.player, s.world, def, item);
+    const scene = getScene(s.sceneId);
+    const hotspot = hotspotInFront(s.player, scene);
     s.player.actionAnimT = 0.18;
+    if (!hotspot) {
+      // Nothing to interact with at the player's current position.
+      Audio.step();
+      return;
+    }
 
-    switch (target.kind) {
-      case 'till':
-        setTile(s.world, target.tx, target.ty, T.TILLED);
-        Audio.till();
-        this.spendEnergy(2);
-        break;
-      case 'untill':
-        setTile(s.world, target.tx, target.ty, T.GRASS);
-        Audio.till();
-        this.spendEnergy(1);
-        break;
-      case 'fill':
-        if (item && def.tool === 'watering') {
-          item.water = def.waterMax;
-          Audio.water();
-          UI.toast('Regador cheio');
-        }
-        break;
-      case 'water':
-        if (item && item.water > 0) {
-          setTile(s.world, target.tx, target.ty, T.WATERED);
-          item.water -= 1;
-          // also water any planted crop on this tile
-          const obj = objectAt(s.world, target.tx, target.ty);
-          if (obj && obj.type === 'crop') obj.watered = true;
-          Audio.water();
-          this.spendEnergy(2);
-        }
-        break;
-      case 'plant': {
-        // selectedItem is a seed; def.plants is the crop id
-        const cropId = def.plants;
-        // season check
-        const seasonOK = !def.season || def.season.includes(s.season);
-        if (!seasonOK) { Audio.cantDo(); UI.toast('Fora de estação'); break; }
-        s.world.objects.push({
-          type: 'crop',
-          cropId,
-          x: target.tx, y: target.ty,
-          daysGrown: 0,
-          watered: tileAt(s.world, target.tx, target.ty) === T.WATERED,
-          ready: false,
-        });
-        removeFromSlot(s.inventory, s.inventory.selected, 1);
-        Audio.plant();
-        break;
+    const action = hotspot.action;
+
+    // Object form: scene change.
+    if (action && typeof action === 'object' && typeof action.goto === 'string') {
+      this.changeScene(action.goto, action.spawn || 'default');
+      return;
+    }
+
+    // String form: placeholder verbs surfaced as toasts.
+    if (typeof action === 'string') {
+      if (action.startsWith('enter:')) {
+        const target = action.slice(6);
+        UI.toast(`Porta para "${target}" — em breve.`);
+        return;
       }
-      case 'chop': {
-        const o = target.obj;
-        o.hp = (o.hp || 3) - 1;
-        Audio.chop();
-        this.spendEnergy(4);
-        if (o.hp <= 0) {
-          o.removed = true;
-          // drop wood
-          const overflow = addItem(s.inventory, 'wood', 4);
-          UI.toast('+4 Madeira');
-        }
-        break;
+      if (action.startsWith('examine:')) {
+        UI.toast(`${hotspot.label || 'Examinar'} — em breve.`);
+        return;
       }
-      case 'chopStump': {
-        const o = target.obj;
-        o.removed = true;
-        addItem(s.inventory, 'wood', 1);
-        Audio.chop();
-        this.spendEnergy(3);
-        UI.toast('+1 Madeira');
-        break;
+      if (action.startsWith('collect:')) {
+        // Evidence collection: "collect:evidence_id"
+        const evidenceId = action.slice(8);
+        if (collectEvidence(s, evidenceId)) saveGame(s);
+        return;
       }
-      case 'rock': {
-        const o = target.obj;
-        o.hp = (o.hp || 2) - 1;
-        Audio.rock();
-        this.spendEnergy(4);
-        if (o.hp <= 0) {
-          o.removed = true;
-          addItem(s.inventory, 'stone', 2);
-          UI.toast('+2 Pedra');
-        }
-        break;
-      }
-      case 'cut': {
-        const o = target.obj;
-        o.removed = true;
-        Audio.cut();
-        this.spendEnergy(1);
-        if (o.type === 'weed') {
-          addItem(s.inventory, 'fiber', 1);
-          UI.toast('+1 Fibra');
-        } else {
-          addItem(s.inventory, 'hay', 1);
-          UI.toast('+1 Feno');
-        }
-        break;
-      }
-      case 'harvest': {
-        const o = target.obj;
-        const def = getCrop(o.cropId);
-        addItem(s.inventory, def.item, 1);
-        Audio.pickup();
-        UI.toast(`+1 ${ITEMS[def.item].name}`);
-        if (def.regrow) {
-          // Regrowing crops: reset to (stages-2) so they ripen again in `regrow` days
-          o.daysGrown = (def.stages - 1) * def.daysPerStage - def.regrow * def.daysPerStage;
-          if (o.daysGrown < 0) o.daysGrown = 0;
-          o.ready = false;
-          o.watered = false;
-        } else {
-          o.removed = true;
-          // Soil reverts to plain tilled
-          if (tileAt(s.world, target.tx, target.ty) === T.WATERED) {
-            setTile(s.world, target.tx, target.ty, T.TILLED);
+      if (action === 'talk' || action.startsWith('talk:')) {
+        setFlag('last_npc_talked', hotspot.label || hotspot.id || null);
+        const dialogId = action.startsWith('talk:') ? action.slice(5) : null;
+        if (dialogId) {
+          const tree = startDialog(dialogId, s);
+          if (tree) {
+            UI.showDialogTree(tree, s);
+          } else {
+            UI.showDialog(hotspot.label || '???', '...');
           }
+        } else {
+          UI.showDialog(hotspot.label || '???', '...');
         }
-        break;
+        return;
       }
-      case 'shop':
-        UI.showShop(s, (id, qty) => addItem(s.inventory, id, qty));
-        break;
-      case 'sleep':
-        UI.showSleepMenu(() => this.sleep(false));
-        break;
-      case 'enter':
-        UI.toast('A casa está trancada... volte na próxima atualização!');
-        break;
-      case 'chest':
-        UI.toast('Baú vazio (em breve!)');
-        break;
-      case 'talk':
-        if (target.obj.name === 'Pierre') {
-          UI.showDialog('Pierre', 'Bem-vindo à Loja Geral! Vendemos sementes para você plantar. Aperte espaço na porta da loja para abrir o catálogo.');
-        }
-        break;
-      default:
-        if (def && def.tool) {
-          Audio.cantDo();
-        }
+    }
+
+    // Fallback: surface the label so the player gets feedback.
+    UI.toast(hotspot.label || 'Interagir');
+  }
+
+  // ---------- Scene transition ----------
+  // Two-phase fade. During phase 'out' the current scene is rendered with a
+  // growing black overlay; at the boundary the scene is swapped and the
+  // player is repositioned to the target scene's spawn; phase 'in' shrinks
+  // the overlay back to transparent. Player input is frozen the whole time.
+
+  changeScene(targetSceneId, spawn = 'default') {
+    if (this._transition) return; // already transitioning
+    // Validate target up-front so we surface bad scene IDs immediately
+    // instead of crashing mid-fade.
+    getScene(targetSceneId);
+    this._transition = {
+      phase: 'out',
+      t: 0,
+      duration: 0.35,
+      target: targetSceneId,
+      spawn,
+    };
+  }
+
+  _advanceTransition(dt) {
+    const tr = this._transition;
+    if (!tr) return;
+    tr.t += dt;
+    if (tr.phase === 'out' && tr.t >= tr.duration) {
+      // Swap scene at the boundary.
+      const s = this.state;
+      const newScene = getScene(tr.target);
+      s.sceneId = tr.target;
+      // Snap player to the requested spawn (or the scene's walkable centre).
+      let spawnX;
+      if (newScene.spawns && typeof newScene.spawns[tr.spawn] === 'number') {
+        spawnX = newScene.spawns[tr.spawn];
+      } else if (newScene.spawns && typeof newScene.spawns.default === 'number') {
+        spawnX = newScene.spawns.default;
+      } else {
+        spawnX = Math.floor((newScene.walkable[0] + newScene.walkable[1]) / 2);
+      }
+      s.player.x = Math.max(
+        newScene.walkable[0],
+        Math.min(newScene.walkable[1] - PLAYER_W, spawnX - PLAYER_W / 2),
+      );
+      s.player.y = newScene.groundY - PLAYER_H;
+      s.player.moving = false;
+      s.player.animFrame = 0;
+      s.player.animTime = 0;
+      // Persist immediately — this is a strong checkpoint.
+      saveGame(s);
+      tr.phase = 'in';
+      tr.t = 0;
+    } else if (tr.phase === 'in' && tr.t >= tr.duration) {
+      this._transition = null;
     }
   }
 
@@ -430,210 +371,131 @@ export class Game {
 
   computeCamera() {
     const s = this.state;
-    const px = s.player.x + 12;
-    const py = s.player.y + 16;
+    const scene = getScene(s.sceneId);
+    const px = s.player.x + PLAYER_W / 2;
     let cx = px - CANVAS_W / 2;
-    let cy = py - CANVAS_H / 2;
-    const maxX = s.world.width * TILE - CANVAS_W;
-    const maxY = s.world.height * TILE - CANVAS_H;
-    cx = Math.max(0, Math.min(maxX, cx));
-    cy = Math.max(0, Math.min(maxY, cy));
+    cx = Math.max(0, Math.min(scene.width - CANVAS_W, cx));
     this._cameraX = Math.floor(cx);
-    this._cameraY = Math.floor(cy);
   }
 
   render() {
     const s = this.state;
     const ctx = this.ctx;
-    ctx.fillStyle = '#0d100b';
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    const scene = getScene(s.sceneId);
+
     this.computeCamera();
-    const cx = this._cameraX, cy = this._cameraY;
+    const cx = this._cameraX;
 
-    // Visible tile range
-    const x0 = Math.max(0, Math.floor(cx / TILE));
-    const y0 = Math.max(0, Math.floor(cy / TILE));
-    const x1 = Math.min(s.world.width - 1, Math.ceil((cx + CANVAS_W) / TILE));
-    const y1 = Math.min(s.world.height - 1, Math.ceil((cy + CANVAS_H) / TILE));
+    // Solid backstop in case any layer doesn't fully cover the canvas.
+    ctx.fillStyle = PALETTE.sky[0];
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-    // Pass 1: tiles
-    const waterFrame = ((Math.floor(s.waterAnimT * 4) % 4) + 4) % 4;
-    for (let ty = y0; ty <= y1; ty++) {
-      for (let tx = x0; tx <= x1; tx++) {
-        this.drawTile(tx, ty, cx, cy, waterFrame);
+    // Pass 1: parallax background layers (sky → far → mid → street).
+    // Foreground layer (parallax > 1.0) is drawn after the player.
+    for (const layer of scene.layers) {
+      if (layer.parallax > 1.0) continue;
+      this.drawLayer(layer, cx);
+    }
+
+    // Pass 2: NPCs (drawn at scene scroll factor 1.0)
+    for (const npc of scene.npcs || []) {
+      this.drawNPC(npc, cx);
+    }
+
+    // Pass 3: player
+    this.drawPlayer(cx);
+
+    // Pass 4: foreground layers (parallax > 1.0, drawn over player for depth).
+    for (const layer of scene.layers) {
+      if (layer.parallax <= 1.0) continue;
+      this.drawLayer(layer, cx);
+    }
+
+    // Pass 5: noir lighting (additive point lights, rain, fog).
+    applyLighting(ctx, scene, cx, this._tSec, this._lastDt);
+
+    // Pass 6: hotspot prompt (suppressed during transitions so the
+    // outgoing scene's prompt doesn't blink while the screen fades).
+    if (!UI.isAnyOverlayOpen() && !this._transition) {
+      const hs = hotspotInFront(s.player, scene);
+      if (hs) {
+        const lx = s.player.x + PLAYER_W / 2 - cx;
+        const ly = scene.groundY - PLAYER_H - 22;
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const label = `[↑] ${hs.label}`;
+        const w = ctx.measureText(label).width + 12;
+        ctx.fillStyle = 'rgba(15, 10, 25, 0.85)';
+        ctx.fillRect(lx - w / 2, ly - 10, w, 20);
+        ctx.strokeStyle = PALETTE.neonAmber;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(lx - w / 2 + 0.5, ly - 9.5, w - 1, 19);
+        ctx.fillStyle = PALETTE.neonAmber;
+        ctx.fillText(label, lx, ly);
       }
     }
 
-    // Pass 2: objects + player, sorted by Y for pseudo-depth
-    const drawables = [];
-    // player
-    drawables.push({ y: s.player.y + 32, draw: () => this.drawPlayer(cx, cy) });
-    for (const o of s.world.objects) {
-      if (o.removed) continue;
-      if (o.x < x0 - 1 || o.x > x1 + 1 || o.y < y0 - 2 || o.y > y1 + 1) continue;
-      drawables.push({ y: o.y * TILE + TILE, draw: () => this.drawObject(o, cx, cy) });
-    }
-    drawables.sort((a, b) => a.y - b.y);
-    for (const d of drawables) d.draw();
-
-    // Pass 3: action target highlight + label
-    if (!UI.isAnyOverlayOpen()) {
-      const def = selectedDef(s.inventory);
-      const item = selectedItem(s.inventory);
-      const target = describeTargetAction(s.player, s.world, def, item);
-      if (target.kind !== 'none') {
-        const tx = target.tx, ty = target.ty;
-        ctx.strokeStyle = 'rgba(255, 230, 100, 0.95)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(tx * TILE - cx + 1, ty * TILE - cy + 1, TILE - 2, TILE - 2);
-        const label = ACTION_LABELS[target.kind];
-        if (label) {
-          ctx.font = 'bold 12px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          const lx = tx * TILE - cx + TILE / 2;
-          const ly = ty * TILE - cy - 10;
-          const w = ctx.measureText(label).width + 10;
-          ctx.fillStyle = 'rgba(35, 26, 16, 0.85)';
-          ctx.fillRect(lx - w / 2, ly - 9, w, 18);
-          ctx.fillStyle = '#ffe69b';
-          ctx.fillText(label, lx, ly);
-        }
-      }
+    // Pass 7: ambient tint (cheap secondary tint on top of lighting; lets
+    // a scene desaturate or warm the whole frame without rebuilding lights).
+    if (scene.ambient && scene.ambient.tint) {
+      ctx.fillStyle = scene.ambient.tint;
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     }
 
-    // Pass 4: lighting / day-night tint
-    this.drawLighting();
-
-    // Pass 5: flash
+    // Pass 8: scene-transition flash (legacy day-recovery flash kept)
     if (s.flash > 0) {
       ctx.fillStyle = `rgba(0,0,0,${Math.min(1, s.flash)})`;
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     }
-  }
 
-  drawTile(tx, ty, cx, cy, waterFrame) {
-    const s = this.state;
-    const t = tileAt(s.world, tx, ty);
-    const dx = tx * TILE - cx;
-    const dy = ty * TILE - cy;
-    const ctx = this.ctx;
-    let img;
-    switch (t) {
-      case T.GRASS: img = SPR.grass[(tx * 7 + ty * 13) % 4]; break;
-      case T.PATH: img = SPR.path; break;
-      case T.TILLED: img = SPR.tilled; break;
-      case T.WATERED: img = SPR.watered; break;
-      case T.WATER: img = SPR.water[waterFrame]; break;
-      case T.STONE_FLOOR: img = SPR.stoneFloor; break;
-      case T.WOOD_FLOOR: img = SPR.wood; break;
-      case T.HOUSE_ROOF: img = SPR.houseRoof; break;
-      case T.SHOP_ROOF: img = SPR.shopRoof; break;
-      case T.WALL: img = SPR.wall; break;
-      case T.HOUSE_DOOR:
-      case T.SHOP_DOOR: img = SPR.door; break;
-      case T.FENCE: img = SPR.fence; break;
-      case T.SHOP_SIGN: img = SPR.shopSign; break;
-      case T.BED:
-        // bed is 2 tiles wide: only draw on the leftmost cell
-        ctx.drawImage(SPR.grass[0], dx, dy);
-        ctx.drawImage(SPR.bed, dx, dy);
-        return;
-      case T.CHEST:
-        ctx.drawImage(SPR.grass[0], dx, dy);
-        ctx.drawImage(SPR.chest, dx, dy);
-        return;
-      default: img = SPR.grass[0];
-    }
-    if (!img) img = SPR.grass[0];
-    if (img) ctx.drawImage(img, dx, dy);
-  }
-
-  drawObject(o, cx, cy) {
-    const ctx = this.ctx;
-    const dx = o.x * TILE - cx;
-    const dy = o.y * TILE - cy;
-    if (o.type === 'tree') {
-      ctx.drawImage(SPR.tree, dx - TILE / 2, dy - TILE * 2);
-    } else if (o.type === 'stump') {
-      ctx.drawImage(SPR.stump, dx, dy);
-    } else if (o.type === 'rock') {
-      ctx.drawImage(SPR.rock, dx, dy);
-    } else if (o.type === 'weed') {
-      ctx.drawImage(SPR.weed, dx, dy);
-    } else if (o.type === 'grassTuft') {
-      ctx.drawImage(SPR.grassTuft, dx, dy);
-    } else if (o.type === 'crop') {
-      const def = getCrop(o.cropId);
-      const stage = Math.min(def.stages - 1, Math.floor((o.daysGrown || 0) / def.daysPerStage));
-      drawCrop(ctx, dx, dy, def, stage, o.watered);
-    } else if (o.type === 'npc') {
-      ctx.drawImage(SPR.shopkeeper, dx + 4, dy);
-      // name tag
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      const w = ctx.measureText(o.name).width + 8;
-      ctx.fillRect(dx + 16 - w / 2, dy - 14, w, 12);
-      ctx.fillStyle = '#ffe7ad';
-      ctx.font = '10px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(o.name, dx + 16, dy - 8);
-    }
-  }
-
-  drawPlayer(cx, cy) {
-    const s = this.state;
-    const p = s.player;
-    const dx = Math.floor(p.x - cx);
-    const dy = Math.floor(p.y - cy);
-    // Soft shadow under the player for visibility/depth
-    this.ctx.save();
-    this.ctx.fillStyle = 'rgba(0,0,0,0.32)';
-    this.ctx.beginPath();
-    this.ctx.ellipse(dx + 12, dy + 31, 9, 3, 0, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.ctx.restore();
-    const frames = SPR.player[p.dir];
-    const fi = p.moving ? p.animFrame : 0;
-    this.ctx.drawImage(frames[fi], dx, dy);
-
-    // Tool swing arc
-    if (p.actionAnimT > 0) {
-      const def = selectedDef(s.inventory);
-      if (def && def.tool) {
-        const t = 1 - (p.actionAnimT / 0.18);
-        const arc = Math.sin(t * Math.PI);
-        this.ctx.fillStyle = '#ffd34d';
-        let ax = dx + 12, ay = dy + 16;
-        if (p.dir === 'up') ay -= 14 * arc;
-        else if (p.dir === 'down') ay += 14 * arc;
-        else if (p.dir === 'left') ax -= 14 * arc;
-        else if (p.dir === 'right') ax += 14 * arc;
-        this.ctx.fillRect(ax - 2, ay - 2, 4, 4);
-      }
-    }
-  }
-
-  drawLighting() {
-    const s = this.state;
-    const ctx = this.ctx;
-    // 0 (full day) at 8:00, 1 (full night) at 22:00; partial in between
-    const totalMin = s.hour * 60 + s.minute;
-    const sunrise = 6 * 60, dayBright = 8 * 60, dusk = 19 * 60, fullDark = 22 * 60;
-    let darkness;
-    if (totalMin <= sunrise) darkness = 0.30;
-    else if (totalMin <= dayBright) darkness = lerp(0.30, 0, (totalMin - sunrise) / (dayBright - sunrise));
-    else if (totalMin <= dusk) darkness = 0;
-    else if (totalMin <= fullDark) darkness = lerp(0, 0.55, (totalMin - dusk) / (fullDark - dusk));
-    else darkness = 0.55 + Math.min(0.15, (totalMin - fullDark) / (60 * 4) * 0.15);
-
-    if (darkness > 0.001) {
-      // bluish night
-      ctx.fillStyle = `rgba(20, 30, 80, ${darkness})`;
+    // Pass 9: scene-change transition overlay
+    if (this._transition) {
+      const tr = this._transition;
+      const k = Math.max(0, Math.min(1, tr.t / tr.duration));
+      const alpha = tr.phase === 'out' ? k : 1 - k;
+      ctx.fillStyle = `rgba(0, 0, 0, ${alpha.toFixed(3)})`;
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     }
   }
-}
 
-function lerp(a, b, t) { return a + (b - a) * Math.max(0, Math.min(1, t)); }
-function seasonName(s) { return ({ spring: 'Primavera', summer: 'Verão', fall: 'Outono', winter: 'Inverno' })[s]; }
+  drawLayer(layer, cameraX) {
+    const img = layer.get();
+    if (!img) return;
+    const offset = -Math.floor(cameraX * layer.parallax);
+    this.ctx.drawImage(img, offset, 0);
+  }
+
+  drawNPC(npc, cameraX) {
+    // Placeholder. Real NPC sprites + dialog hooks land with the dialog-tree PR.
+    const ctx = this.ctx;
+    const dx = Math.floor(npc.x - cameraX);
+    const dy = (npc.y || 0);
+    ctx.fillStyle = '#3a3a44';
+    ctx.fillRect(dx, dy, PLAYER_W, PLAYER_H);
+  }
+
+  drawPlayer(cameraX) {
+    const s = this.state;
+    const p = s.player;
+    const dx = Math.floor(p.x - cameraX);
+    const dy = Math.floor(p.y);
+    const ctx = this.ctx;
+
+    // pick frame
+    let img;
+    if (p.moving) img = SPR.player.walk[p.animFrame];
+    else img = SPR.player.idle[Math.floor((Date.now() / 600) % 2)];
+    if (!img) return;
+
+    if (p.dir === 'left') {
+      ctx.save();
+      ctx.translate(dx + PLAYER_W, dy);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0);
+      ctx.restore();
+    } else {
+      ctx.drawImage(img, dx, dy);
+    }
+  }
+}

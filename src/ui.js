@@ -1,7 +1,15 @@
 // HUD + overlay menus. The DOM elements live in index.html; we read/write them.
+//
+// Engine-level scaffold: dialog + inventory + title overlays remain. Shop and
+// sleep-menu overlays were removed with the farming gut and will be replaced
+// by noir-RPG narrative overlays (case file, gadget select, conversation tree).
 
-import { ITEMS, SHOP_BUY_LIST } from './items.js';
+import { ITEMS } from './items.js';
 import { Audio } from './audio.js';
+import { HOTBAR_SIZE } from './inventory.js';
+import { EVIDENCE, getAvailableCombinations, tryCombineEvidence, isDialogUnlocked } from './evidence.js';
+import { saveGame, setFlag } from './save.js';
+import { getDialog, advanceNode, getAvailableChoices, DIALOGS } from './dialogs.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -10,7 +18,6 @@ export function toast(msg) {
   const el = $('#toast');
   el.textContent = msg;
   el.classList.remove('hidden');
-  // restart animation
   el.style.animation = 'none';
   el.offsetHeight; // reflow
   el.style.animation = '';
@@ -19,11 +26,9 @@ export function toast(msg) {
 }
 
 export function updateHUD(state) {
-  const seasonNames = { spring: 'Primavera', summer: 'Verão', fall: 'Outono', winter: 'Inverno' };
   const hh = String(state.hour).padStart(2, '0');
   const mm = String(Math.floor(state.minute / 10) * 10).padStart(2, '0');
-  $('#clock').textContent = `${seasonNames[state.season]} ${state.day} — ${hh}:${mm}`;
-  $('#weather').textContent = state.weather === 'rain' ? '🌧️ Chuva' : state.weather === 'storm' ? '⛈️ Tempestade' : '☀️ Sol';
+  $('#clock').textContent = `Noite ${state.day} — ${hh}:${mm}`;
   $('#money').textContent = `💰 ${state.money}g`;
 
   const e = $('#energy');
@@ -34,10 +39,9 @@ export function updateHUD(state) {
 
   // Hotbar
   const hb = $('#hotbar');
-  if (hb.children.length !== state.inventory.slots.length || hb.dataset.size !== '9') {
+  if (hb.children.length !== HOTBAR_SIZE) {
     hb.innerHTML = '';
-    hb.dataset.size = '9';
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < HOTBAR_SIZE; i++) {
       const slot = document.createElement('div');
       slot.className = 'slot';
       slot.dataset.idx = i;
@@ -48,7 +52,7 @@ export function updateHUD(state) {
       hb.appendChild(slot);
     }
   }
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < HOTBAR_SIZE; i++) {
     const s = state.inventory.slots[i];
     const el = hb.children[i];
     el.classList.toggle('active', state.inventory.selected === i);
@@ -59,6 +63,7 @@ export function updateHUD(state) {
     el.appendChild(key);
     if (s) {
       const def = ITEMS[s.id];
+      if (!def) continue;
       const ic = document.createElement('span');
       ic.className = 'icon';
       ic.textContent = def.icon;
@@ -67,14 +72,6 @@ export function updateHUD(state) {
         const cnt = document.createElement('span');
         cnt.className = 'count';
         cnt.textContent = s.qty;
-        el.appendChild(cnt);
-      }
-      // For watering can, show water level
-      if (def.tool === 'watering' && typeof s.water === 'number') {
-        const cnt = document.createElement('span');
-        cnt.className = 'count';
-        cnt.textContent = s.water;
-        cnt.style.color = '#83c1ff';
         el.appendChild(cnt);
       }
     }
@@ -90,162 +87,254 @@ export function showDialog(name, text, onClose) {
   el.classList.remove('hidden');
   el._onClose = onClose;
 }
+
+// ---------- Dialog Tree ----------
+
+let _currentDialog = null;
+let _dialogState = null;
+
+export function showDialogTree(tree, state) {
+  _currentDialog = tree;
+  _dialogState = state;
+  renderDialogNode(tree);
+}
+
+function renderDialogNode(node) {
+  const el = $('#dialog');
+  const nameEl = $('#dialog-name');
+  const textEl = $('#dialog-text');
+  const hintEl = $('#dialog-hint');
+  
+  nameEl.textContent = ''; // NPC name hidden for now
+  textEl.textContent = node.text;
+  
+  // Clear old choices
+  const oldChoices = el.querySelectorAll('.dialog-choice');
+  oldChoices.forEach(c => c.remove());
+  
+  // Show only choices whose evidence requirements are met
+  const choices = getAvailableChoices(node, _dialogState);
+  if (choices.length > 0) {
+    hintEl.textContent = '';
+    choices.forEach((choice, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'dialog-choice';
+      btn.textContent = choice.text;
+      btn.addEventListener('click', () => handleChoice(choice));
+      textEl.parentNode.appendChild(btn);
+    });
+  } else {
+    hintEl.textContent = '[Espaço] continuar';
+  }
+  
+  el.classList.remove('hidden');
+}
+
+function handleChoice(choice) {
+  if (!_currentDialog) return;
+  if (choice.requiresEvidence && !isDialogUnlocked(choice.requiresEvidence)) return;
+
+  if (choice.setFlag) {
+    setFlag(choice.setFlag, true);
+  }
+  
+  // Navigate to next
+  if (choice.next) {
+    const nextNode = DIALOGS[choice.next];
+    if (nextNode) {
+      _currentDialog = nextNode;
+      renderDialogNode(nextNode);
+    } else {
+      hideDialog();
+    }
+  } else {
+    hideDialog();
+  }
+}
+
+export function advanceOrCloseDialog() {
+  if (!_currentDialog) return;
+  const nextNode = advanceNode(_currentDialog);
+  if (nextNode) {
+    _currentDialog = nextNode;
+    renderDialogNode(nextNode);
+  } else {
+    hideDialog();
+  }
+}
+
 export function hideDialog() {
   const el = $('#dialog');
   if (el.classList.contains('hidden')) return;
   el.classList.add('hidden');
+  const choices = el.querySelectorAll('.dialog-choice');
+  choices.forEach(c => c.remove());
   const cb = el._onClose;
   el._onClose = null;
   if (cb) cb();
+  _currentDialog = null;
+  _dialogState = null;
 }
 export function isDialogOpen() { return !$('#dialog').classList.contains('hidden'); }
 
-// ---------- Shop ----------
-
-let shopState = { tab: 'buy', state: null };
-
-function renderShop() {
-  const grid = $('#shop-items');
-  grid.innerHTML = '';
-  $('#shop-money').textContent = `${shopState.state.money}g`;
-
-  if (shopState.tab === 'buy') {
-    for (const id of SHOP_BUY_LIST) {
-      const def = ITEMS[id];
-      const seasonOK = !def.season || def.season.includes(shopState.state.season);
-      const item = document.createElement('div');
-      item.className = 'shop-item';
-      item.style.opacity = seasonOK ? 1 : 0.45;
-      item.title = seasonOK ? '' : 'Fora de estação';
-      item.innerHTML = `
-        <span class="icon">${def.icon}</span>
-        <span class="meta"><span class="name">${def.name}</span><span class="price">${def.buy}g</span></span>
-      `;
-      item.addEventListener('click', () => {
-        if (!seasonOK) { Audio.cantDo(); toast('Fora de estação'); return; }
-        if (shopState.state.money < def.buy) { Audio.cantDo(); toast('Sem dinheiro'); return; }
-        shopState.state.money -= def.buy;
-        const overflow = shopState.onAdd(id, 1);
-        if (overflow) {
-          shopState.state.money += def.buy; // refund
-          Audio.cantDo();
-          toast('Inventário cheio');
-          return;
-        }
-        Audio.buy();
-        renderShop();
-      });
-      grid.appendChild(item);
-    }
-  } else {
-    // Sellable items: anything in inventory with sell value, excluding tools.
-    const inv = shopState.state.inventory;
-    for (let i = 0; i < inv.slots.length; i++) {
-      const s = inv.slots[i];
-      if (!s) continue;
-      const def = ITEMS[s.id];
-      if (!def.sell) continue;
-      if (def.tool) continue;
-      const item = document.createElement('div');
-      item.className = 'shop-item';
-      item.innerHTML = `
-        <span class="icon">${def.icon}</span>
-        <span class="meta"><span class="name">${def.name} ×${s.qty}</span><span class="price">+${def.sell}g</span></span>
-      `;
-      item.addEventListener('click', () => {
-        shopState.state.money += def.sell;
-        s.qty -= 1;
-        if (s.qty <= 0) inv.slots[i] = null;
-        Audio.sell();
-        renderShop();
-      });
-      grid.appendChild(item);
-    }
-    if (!grid.children.length) {
-      const empty = document.createElement('div');
-      empty.style.gridColumn = '1 / -1';
-      empty.style.padding = '12px';
-      empty.style.textAlign = 'center';
-      empty.style.color = '#4d2b1a';
-      empty.textContent = 'Nada para vender ainda. Plante e colha!';
-      grid.appendChild(empty);
-    }
-  }
-}
-
-export function showShop(state, onAdd) {
-  shopState = { tab: 'buy', state, onAdd };
-  $('#shop').classList.remove('hidden');
-  $('#shop-tabs button[data-tab=buy]')?.classList.add('active');
-  $('#shop-tabs button[data-tab=sell]')?.classList.remove('active');
-  // Bind tabs once
-  $('#shop').querySelectorAll('.shop-tabs button').forEach((b) => {
-    b.onclick = () => {
-      $('#shop').querySelectorAll('.shop-tabs button').forEach((x) => x.classList.remove('active'));
-      b.classList.add('active');
-      shopState.tab = b.dataset.tab;
-      renderShop();
-    };
-  });
-  renderShop();
-}
-export function hideShop() { $('#shop').classList.add('hidden'); }
-export function isShopOpen() { return !$('#shop').classList.contains('hidden'); }
-
 // ---------- Inventory ----------
 
-export function showInventory(state) {
+let _combineMode = null; // { slotA, state }
+
+export function showInventory(state, combineMode = null) {
+  _combineMode = combineMode;
   const el = $('#inventory');
   el.classList.remove('hidden');
   const grid = $('#inv-grid');
   grid.innerHTML = '';
   const inv = state.inventory;
+  
+  // Header with mode indicator
+  const header = $('#inv-header-text');
+  if (header) {
+    header.textContent = combineMode ? 'Combinando — clique no segundo item' : 'Inventário';
+  }
+  
   inv.slots.forEach((s, i) => {
     const cell = document.createElement('div');
     cell.className = 'inv-item';
     cell.classList.toggle('equipped', i === inv.selected);
+    cell.dataset.slot = i;
+    
+    // In combine mode: highlight source slot
+    if (combineMode && combineMode.slotA === i) {
+      cell.classList.add('combine-source');
+    }
+    
     if (!s) {
       cell.style.opacity = 0.35;
       cell.innerHTML = `<span class="icon">·</span><span class="meta"><span class="name">— vazio —</span><span class="qty">slot ${i + 1}</span></span>`;
     } else {
       const def = ITEMS[s.id];
-      cell.innerHTML = `
+      if (!def) return;
+      
+      const isEvidence = def.evidence === true;
+      
+      let html = `
         <span class="icon">${def.icon}</span>
-        <span class="meta"><span class="name">${def.name}</span><span class="qty">${
-          def.tool === 'watering' ? `água ${s.water || 0}/${def.waterMax}` : `×${s.qty}`
-        }</span></span>
+        <span class="meta"><span class="name">${def.name}</span><span class="qty">×${s.qty}</span></span>
       `;
+      
+      // Evidence description tooltip
+      if (isEvidence && def.description) {
+        html += `<div class="evidence-desc">${def.description}</div>`;
+      }
+      
+      cell.innerHTML = html;
+      
+      // Click handler
       cell.addEventListener('click', () => {
-        // If clicking a hotbar slot, equip; else move into hotbar selected.
-        if (i < 9) {
+        if (_combineMode && _combineMode.slotA !== i) {
+          const result = tryCombineEvidence(state, _combineMode.slotA, i);
+          _combineMode = null;
+          if (result && result.success) {
+            saveGame(state);
+          }
+          showInventory(state);
+        } else if (_combineMode && _combineMode.slotA === i) {
+          _combineMode = null;
+          showInventory(state);
+        } else if (isEvidence && def.combinableWith && def.combinableWith.length > 0) {
+          showInventory(state, { slotA: i });
+        } else if (i < HOTBAR_SIZE) {
           inv.selected = i;
+          showInventory(state, _combineMode);
         } else {
-          // swap with currently selected hotbar slot
           const tmp = inv.slots[inv.selected];
           inv.slots[inv.selected] = s;
           inv.slots[i] = tmp;
+          showInventory(state, _combineMode);
         }
-        showInventory(state);
       });
+      
+      // Right-click: show evidence detail (zoom)
+      if (isEvidence) {
+        cell.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          showEvidenceDetail(def);
+        });
+      }
     }
     grid.appendChild(cell);
   });
+  
+  // Available combinations for current slot (if in combine mode)
+  if (combineMode) {
+    const combos = getAvailableCombinations(state, combineMode.slotA);
+    if (combos.length > 0) {
+      const info = $('#inv-info');
+      if (info) {
+        info.textContent = `Combine "${combos[0].withDef.name}" com este item?`;
+      }
+    }
+  }
 }
-export function hideInventory() { $('#inventory').classList.add('hidden'); }
+
+// Show evidence detail in modal
+let _evidenceDetail = null;
+function showEvidenceDetail(def) {
+  let modal = $('#evidence-detail');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'evidence-detail';
+    modal.className = 'overlay';
+    modal.innerHTML = `
+      <div class="evidence-detail-box">
+        <div class="detail-icon"></div>
+        <div class="detail-name"></div>
+        <div class="detail-desc"></div>
+        <div class="detail-hint">[click/ESC] fechar</div>
+      </div>
+    `;
+    modal.addEventListener('click', hideEvidenceDetail);
+    document.body.appendChild(modal);
+  }
+  
+  modal.querySelector('.detail-icon').textContent = def.icon;
+  modal.querySelector('.detail-name').textContent = def.name;
+  modal.querySelector('.detail-desc').textContent = def.description || 'Sem descrição.';
+  modal.classList.remove('hidden');
+  _evidenceDetail = modal;
+}
+
+function hideEvidenceDetail() {
+  const modal = $('#evidence-detail');
+  if (modal) modal.classList.add('hidden');
+  _evidenceDetail = null;
+}
+
+export function hideInventory() { 
+  $('#inventory').classList.add('hidden'); 
+  hideEvidenceDetail();
+  _combineMode = null;
+}
 export function isInventoryOpen() { return !$('#inventory').classList.contains('hidden'); }
 
-// ---------- Sleep ----------
+// Combine mode API for game.js
+export function getCombineMode() { return _combineMode; }
 
-export function showSleepMenu(onYes) {
-  const el = $('#sleep-menu');
-  el.classList.remove('hidden');
-  const yes = $('#sleep-yes');
-  const no = $('#sleep-no');
-  yes.onclick = () => { hideSleepMenu(); onYes(); };
-  no.onclick = () => hideSleepMenu();
+export function attemptCombine(state) {
+  if (!_combineMode || _combineMode.slotA === undefined) return;
+  const selected = state.inventory.selected;
+  if (selected === _combineMode.slotA) {
+    // Cancel combine mode
+    _combineMode = null;
+    showInventory(state);
+    return;
+  }
+  const result = tryCombineEvidence(state, _combineMode.slotA, selected);
+  if (result && result.success) {
+    // Success: refresh and exit combine mode
+    _combineMode = null;
+    saveGame(state); // Auto-save
+    showInventory(state);
+  }
 }
-export function hideSleepMenu() { $('#sleep-menu').classList.add('hidden'); }
-export function isSleepOpen() { return !$('#sleep-menu').classList.contains('hidden'); }
 
 // ---------- Title ----------
 
@@ -254,5 +343,15 @@ export function showTitle() { $('#title').classList.remove('hidden'); }
 export function isTitleOpen() { return !$('#title').classList.contains('hidden'); }
 
 export function isAnyOverlayOpen() {
-  return isShopOpen() || isInventoryOpen() || isDialogOpen() || isSleepOpen() || isTitleOpen();
+  return isInventoryOpen() || isDialogOpen() || isTitleOpen();
 }
+
+// ---------- HUD visibility ----------
+//
+// The cutscene system takes over the canvas and renders its own cinematic
+// frames; the gameplay HUD (clock, money, energy, hotbar) is irrelevant
+// during a cutscene and would visually leak through. These two helpers
+// toggle a class on `#hud` that hides it via CSS.
+
+export function hideHUD() { $('#hud').classList.add('cutscene-hidden'); }
+export function showHUD() { $('#hud').classList.remove('cutscene-hidden'); }
