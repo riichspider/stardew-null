@@ -1,54 +1,58 @@
-# Pixel Engine (ex-Stardew Null)
+# Pixel Engine — Noir (ex-Stardew Null)
 
-Esqueleto de jogo 2D em **JavaScript puro** (sem frameworks, sem bundlers, sem assets externos). Tudo é desenhado proceduralmente em canvas — sprites, áudio e o mapa do mundo. Originalmente um clone mini de Stardew Valley; agora foi reduzido a um motor genérico que vai virar um **RPG noir de investigação inspirado em Blade Runner**, em PRs incrementais.
+Esqueleto de **RPG noir de investigação side-view** em JavaScript puro (sem frameworks, sem bundlers). Inspirado em Blade Runner / Backbone — pixel art usada para iluminação cinemática, foco em diálogo dinâmico e investigação.
+
+Tudo é desenhado proceduralmente em canvas (sprites, áudio, cenas). PNGs hand-drawn opcionais podem ser dropados em `assets/` e o motor os usa no lugar dos procedurais — veja `assets/README.md`.
 
 > Demo ao vivo: https://stardew-clone-rfhmzkbr.devinapps.com
+
+## Histórico
+
+Originalmente um clone mini de Stardew Valley (PR #1). Depois cleanup técnico (PR #3 — `config.js`, fix de path bloqueado, scripts npm). Depois gut completo de fazenda → engine genérica (PR #4). Agora pivotou para side-view noir (este PR).
 
 ## Status atual
 
 **Funcional hoje**
 
-- Mapa tile-based (50×32 tiles) com grama, cerca, lago e caminho
-- Movimento 4-direcional com animação de caminhada e sombra suave
-- Ciclo dia/noite com tinta noturna progressiva (rollover automático às 02h)
-- Inventário + hotbar (9 slots) com seleção via `1`–`9`
-- HUD: relógio (Dia N — HH:MM), dinheiro, barra de energia
-- Diálogo com NPC (placeholder, sem árvore de escolhas ainda)
-- Save/load automático ao virar o dia (localStorage, chave `stardew-null:save:v2`)
-- Árvores e pedras placeholder com cortar/quebrar (geram madeira/pedra)
-- SFX procedurais via WebAudio
-- Camera, render por Y-sort, action-target highlighter
+- Renderização side-view com câmera horizontal e parallax em 5 camadas (sky → far skyline → mid buildings → street → foreground)
+- Detetive side-profile com fedora + sobretudo + cigarro aceso (procedural, 24×32, 2 idle + 4 walk frames; flip horizontal para left-facing)
+- Cena `street01` (2400 px de largura) com hotspots placeholder (porta de prédio, porta de bar)
+- Movimento horizontal com clamp em walkable bounds; câmera seguindo player com clamp em `[0, sceneWidth - canvasW]`
+- HUD: relógio (`Noite N — HH:MM`), dinheiro, barra de energia, hotbar
+- Inventário, diálogo overlay, title screen — todos os overlays do gut
+- Save/load automático em localStorage (`stardew-null:save:v3` — bumpou da v2 do gut)
+- Asset loader (`src/assets.js`) que tenta carregar PNGs declarados no manifest e cai pro procedural quando ausente
+- SFX WebAudio procedurais (framework, sem cues específicas ainda)
 
-**A construir (PRs futuros)**
+**A construir (PRs futuros, ordem provisória)**
 
-- Árvore de diálogo com escolhas que mudam o estado do mundo
-- Sistema de pistas / evidências / case file
-- Gadgets de investigação (lanterna UV, scanner, gravador, taser)
-- Lighting cinemático: chuva animada, neon, point lights, fog volumétrico
-- Combate em tempo real (mira + uso de gadgets)
-- Cidade noir gerada (quarteirões, becos, prédios com interior)
+- **PR #6** — lighting cinemático noir: chuva animada, neon piscando, point lights nos postes, fog volumétrico
+- **PR #7** — sistema de cenas com transições (fade in/out entre `street01` → `apartment` → `bar`)
+- **PR #8** — árvore de diálogo com escolhas que setam flags de mundo
+- **PR #9** — expansão do case file (novas pistas e combinações avançadas de evidências)
+- **PR #10** — gadgets (lanterna UV, scanner, gravador, taser) + ação de investigar
+- **PR #11** — combate em tempo real (mira + uso de gadgets)
 
 ## Como rodar
 
-Qualquer servidor estático moderno serve. Não há build step, dependências ou bundler.
+Qualquer servidor estático moderno serve. Sem build step.
 
 ```bash
-npm start            # equivalente a: python3 -m http.server 5173
-# ou diretamente:
-python3 -m http.server 5173
+npm start              # equivalente a: python3 -m http.server 5173
 ```
 
 Depois abra http://localhost:5173/.
 
 ```bash
-npm run lint         # checa sintaxe de todos os módulos com `node --check`
+npm run lint           # checa sintaxe de todos os módulos com `node --check`
 ```
 
 ### Controles
 
 | Tecla | Ação |
 |------:|:-----|
-| `WASD` / setas | andar |
+| `A`/`D` ou `←`/`→` | andar pela rua (esquerda/direita) |
+| `W`/`↑` | interagir com hotspot (porta, NPC, evidência) |
 | `Espaço` | interagir · avançar diálogo |
 | `1`–`9` | selecionar slot da hotbar |
 | `I` | abrir inventário |
@@ -58,28 +62,31 @@ npm run lint         # checa sintaxe de todos os módulos com `node --check`
 
 ```
 stardew-clone/
-├── index.html        # canvas + overlays HTML (HUD, dialog, inventory, title)
-├── styles.css        # estilo dos overlays
+├── index.html         # canvas + overlays HTML (HUD, dialog, inventory, title)
+├── styles.css         # estilo dos overlays
+├── assets/            # PNGs hand-drawn opcionais (procedural fallback se vazio)
+│   └── README.md      # convenções de slot, paleta, dimensões
 └── src/
-    ├── main.js       # boot
-    ├── config.js     # constantes de balance (mundo, tempo, energia, dinheiro)
-    ├── game.js       # game loop, update, render, day/night, save/load orchestration
-    ├── world.js      # mapa, tiles, objetos
-    ├── player.js     # movimento, animação, target picking
-    ├── sprites.js    # sprites pixel-art proceduriais
-    ├── items.js      # registro de itens
-    ├── inventory.js  # hotbar + bag
-    ├── ui.js         # HUD, diálogo, inventário, title
-    ├── audio.js      # SFX WebAudio
-    ├── input.js      # teclado
-    └── save.js       # localStorage
+    ├── main.js        # boot (buildSprites + loadAssets em paralelo)
+    ├── config.js      # constantes de balance + paleta noir
+    ├── game.js        # loop, update, render side-view, save/load orchestration
+    ├── scenes.js      # registry de cenas
+    ├── scenes/
+    │   └── street01.js  # primeira cena noir (rua, prédios, hotspots)
+    ├── player.js      # movimento horizontal 2-direção, hotspot picking
+    ├── sprites.js     # geradores procedurais (detetive, sky, prédios, calçada, fg)
+    ├── assets.js      # loader de PNGs com fallback
+    ├── items.js       # registro de itens (vazio até gadgets entrarem)
+    ├── inventory.js   # hotbar + bag
+    ├── ui.js          # HUD, diálogo, inventário, title
+    ├── audio.js       # SFX WebAudio
+    ├── input.js       # teclado
+    └── save.js        # localStorage v3
 ```
 
-Para mudar tamanho do mundo, duração do dia, energia inicial, dinheiro inicial, etc., edite **`src/config.js`** — é o ponto único de tuning.
+Para mudar paleta, dimensões da cena, velocidade do player, duração do dia, etc., edite **`src/config.js`** — é o ponto único de tuning.
 
-## Histórico
-
-Esse repo nasceu como um mini-Stardew (PR #1). Depois passou por um cleanup (PR #3 — `config.js`, fix de path bloqueado por árvore, scripts npm). Agora está sendo gutado para virar engine-only (este PR) e seguir para o noir RPG nos PRs seguintes.
+Para adicionar uma nova cena: criar `src/scenes/<id>.js` com width/groundY/walkable/layers/hotspots, registrar em `src/scenes.js`, e (opcional) dropar PNGs em `assets/scenes/<id>/` seguindo a convenção em `assets/README.md`.
 
 ## Licença
 

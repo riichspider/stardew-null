@@ -7,6 +7,8 @@
 import { ITEMS } from './items.js';
 import { Audio } from './audio.js';
 import { HOTBAR_SIZE } from './inventory.js';
+import { EVIDENCE, getAvailableCombinations, tryCombineEvidence } from './evidence.js';
+import { saveGame } from './save.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -25,7 +27,7 @@ export function toast(msg) {
 export function updateHUD(state) {
   const hh = String(state.hour).padStart(2, '0');
   const mm = String(Math.floor(state.minute / 10) * 10).padStart(2, '0');
-  $('#clock').textContent = `Dia ${state.day} — ${hh}:${mm}`;
+  $('#clock').textContent = `Noite ${state.day} — ${hh}:${mm}`;
   $('#money').textContent = `💰 ${state.money}g`;
 
   const e = $('#energy');
@@ -96,42 +98,162 @@ export function isDialogOpen() { return !$('#dialog').classList.contains('hidden
 
 // ---------- Inventory ----------
 
-export function showInventory(state) {
+let _combineMode = null; // { slotA, state }
+
+export function showInventory(state, combineMode = null) {
+  _combineMode = combineMode;
   const el = $('#inventory');
   el.classList.remove('hidden');
   const grid = $('#inv-grid');
   grid.innerHTML = '';
   const inv = state.inventory;
+  
+  // Header with mode indicator
+  const header = $('#inv-header-text');
+  if (header) {
+    header.textContent = combineMode ? 'Combinando — clique no segundo item' : 'Inventário';
+  }
+  
   inv.slots.forEach((s, i) => {
     const cell = document.createElement('div');
     cell.className = 'inv-item';
     cell.classList.toggle('equipped', i === inv.selected);
+    cell.dataset.slot = i;
+    
+    // In combine mode: highlight source slot
+    if (combineMode && combineMode.slotA === i) {
+      cell.classList.add('combine-source');
+    }
+    
     if (!s) {
       cell.style.opacity = 0.35;
       cell.innerHTML = `<span class="icon">·</span><span class="meta"><span class="name">— vazio —</span><span class="qty">slot ${i + 1}</span></span>`;
     } else {
       const def = ITEMS[s.id];
-      if (!def) { grid.appendChild(cell); return; }
-      cell.innerHTML = `
+      if (!def) return;
+      
+      const isEvidence = def.evidence === true;
+      
+      let html = `
         <span class="icon">${def.icon}</span>
         <span class="meta"><span class="name">${def.name}</span><span class="qty">×${s.qty}</span></span>
       `;
+      
+      // Evidence description tooltip
+      if (isEvidence && def.description) {
+        html += `<div class="evidence-desc">${def.description}</div>`;
+      }
+      
+      cell.innerHTML = html;
+      
+      // Click handler
       cell.addEventListener('click', () => {
-        if (i < HOTBAR_SIZE) {
+        if (_combineMode && _combineMode.slotA !== i) {
+          const result = tryCombineEvidence(state, _combineMode.slotA, i);
+          _combineMode = null;
+          if (result && result.success) {
+            saveGame(state);
+          }
+          showInventory(state);
+        } else if (_combineMode && _combineMode.slotA === i) {
+          _combineMode = null;
+          showInventory(state);
+        } else if (isEvidence && def.combinableWith && def.combinableWith.length > 0) {
+          showInventory(state, { slotA: i });
+        } else if (i < HOTBAR_SIZE) {
           inv.selected = i;
+          showInventory(state, _combineMode);
         } else {
           const tmp = inv.slots[inv.selected];
           inv.slots[inv.selected] = s;
           inv.slots[i] = tmp;
+          showInventory(state, _combineMode);
         }
-        showInventory(state);
       });
+      
+      // Right-click: show evidence detail (zoom)
+      if (isEvidence) {
+        cell.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          showEvidenceDetail(def);
+        });
+      }
     }
     grid.appendChild(cell);
   });
+  
+  // Available combinations for current slot (if in combine mode)
+  if (combineMode) {
+    const combos = getAvailableCombinations(state, combineMode.slotA);
+    if (combos.length > 0) {
+      const info = $('#inv-info');
+      if (info) {
+        info.textContent = `Combine "${combos[0].withDef.name}" com este item?`;
+      }
+    }
+  }
 }
-export function hideInventory() { $('#inventory').classList.add('hidden'); }
+
+// Show evidence detail in modal
+let _evidenceDetail = null;
+function showEvidenceDetail(def) {
+  let modal = $('#evidence-detail');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'evidence-detail';
+    modal.className = 'overlay';
+    modal.innerHTML = `
+      <div class="evidence-detail-box">
+        <div class="detail-icon"></div>
+        <div class="detail-name"></div>
+        <div class="detail-desc"></div>
+        <div class="detail-hint">[click/ESC] fechar</div>
+      </div>
+    `;
+    modal.addEventListener('click', hideEvidenceDetail);
+    document.body.appendChild(modal);
+  }
+  
+  modal.querySelector('.detail-icon').textContent = def.icon;
+  modal.querySelector('.detail-name').textContent = def.name;
+  modal.querySelector('.detail-desc').textContent = def.description || 'Sem descrição.';
+  modal.classList.remove('hidden');
+  _evidenceDetail = modal;
+}
+
+function hideEvidenceDetail() {
+  const modal = $('#evidence-detail');
+  if (modal) modal.classList.add('hidden');
+  _evidenceDetail = null;
+}
+
+export function hideInventory() { 
+  $('#inventory').classList.add('hidden'); 
+  hideEvidenceDetail();
+  _combineMode = null;
+}
 export function isInventoryOpen() { return !$('#inventory').classList.contains('hidden'); }
+
+// Combine mode API for game.js
+export function getCombineMode() { return _combineMode; }
+
+export function attemptCombine(state) {
+  if (!_combineMode || _combineMode.slotA === undefined) return;
+  const selected = state.inventory.selected;
+  if (selected === _combineMode.slotA) {
+    // Cancel combine mode
+    _combineMode = null;
+    showInventory(state);
+    return;
+  }
+  const result = tryCombineEvidence(state, _combineMode.slotA, selected);
+  if (result && result.success) {
+    // Success: refresh and exit combine mode
+    _combineMode = null;
+    saveGame(state); // Auto-save
+    showInventory(state);
+  }
+}
 
 // ---------- Title ----------
 
@@ -142,3 +264,13 @@ export function isTitleOpen() { return !$('#title').classList.contains('hidden')
 export function isAnyOverlayOpen() {
   return isInventoryOpen() || isDialogOpen() || isTitleOpen();
 }
+
+// ---------- HUD visibility ----------
+//
+// The cutscene system takes over the canvas and renders its own cinematic
+// frames; the gameplay HUD (clock, money, energy, hotbar) is irrelevant
+// during a cutscene and would visually leak through. These two helpers
+// toggle a class on `#hud` that hides it via CSS.
+
+export function hideHUD() { $('#hud').classList.add('cutscene-hidden'); }
+export function showHUD() { $('#hud').classList.remove('cutscene-hidden'); }
