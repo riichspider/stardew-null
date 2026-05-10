@@ -9,7 +9,7 @@ import { Audio } from './audio.js';
 import { SPR, PLAYER_W, PLAYER_H } from './sprites.js';
 import { getScene } from './scenes.js';
 import { createPlayer, updatePlayer, hotspotInFront } from './player.js';
-import { addItem } from './inventory.js';
+import { createInventory, addItem } from './inventory.js';
 import * as UI from './ui.js';
 import { saveGame, loadGame } from './save.js';
 import { applyLighting } from './lighting.js';
