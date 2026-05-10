@@ -32,6 +32,20 @@ export const ASSET_MANIFEST = {
   'scene.apartment01.wall':  { url: 'assets/scenes/apartment01/wall.png' },
   'scene.apartment01.floor': { url: 'assets/scenes/apartment01/floor.png' },
   'scene.apartment01.props': { url: 'assets/scenes/apartment01/props.png' },
+
+  // ---- Cutscene: opening (procedural fallback unless PNG provided) ----
+  // Portraits — 88×90 px, drawn into the subtitle box during the opening
+  // cutscene. Hand-drawn PNGs replace the procedural busts when present.
+  'cutscene.portrait.detective': { url: 'assets/cutscene/portrait_detective.png' },
+  'cutscene.portrait.client':    { url: 'assets/cutscene/portrait_client.png' },
+  'cutscene.portrait.chief':     { url: 'assets/cutscene/portrait_chief.png' },
+  // Backdrop overrides for individual shots. Each is a single 960×640
+  // (interior shots) or 1800×640 (exterior pan) PNG. Procedural fallback
+  // if missing.
+  'cutscene.shot.cityPan':      { url: 'assets/cutscene/shot_city_pan.png' },
+  'cutscene.shot.officeIntro':  { url: 'assets/cutscene/shot_office_intro.png' },
+  'cutscene.shot.caseFile':     { url: 'assets/cutscene/shot_case_file.png' },
+  'cutscene.shot.prepExit':     { url: 'assets/cutscene/shot_prep_exit.png' },
 };
 
 function loadImage(url) {

@@ -28,6 +28,22 @@ Side-profile, 24×32 px (ou múltiplo proporcional). Vira automaticamente no eix
 | `sprites/detective_walk_2.png` | Walk frame 3 (passo esquerdo) |
 | `sprites/detective_walk_3.png` | Walk frame 4 (passagem neutra) |
 
+### Cutscene de abertura
+
+A cutscene tem 4 shots (cityPan, officeIntro, caseFile, prepExit) e três retratos (detective, client, chief). Tudo procedural por padrão — substituir é opcional.
+
+| Arquivo | Conteúdo | Tamanho |
+|---|---|---|
+| `cutscene/portrait_detective.png` | Retrato do detetive (subtitle box) | 88×90 |
+| `cutscene/portrait_client.png` | Retrato da cliente | 88×90 |
+| `cutscene/portrait_chief.png` | Retrato do chefe | 88×90 |
+| `cutscene/shot_city_pan.png` | Backdrop do shot 1 (panorâmica da cidade) | 1800×640 |
+| `cutscene/shot_office_intro.png` | Backdrop do shot 2 (escritório do detetive) | 960×640 |
+| `cutscene/shot_case_file.png` | Backdrop do shot 3 (arquivos sobre a mesa) | 960×640 |
+| `cutscene/shot_prep_exit.png` | Backdrop do shot 4 (detetive saindo) | 960×640 |
+
+> Os shots backdrops ainda não estão wireados pra substituir o procedural — só os retratos. (A wiring de backdrops vem em PR futuro quando você tiver o primeiro PNG pronto.)
+
 ### Scene `street01`
 
 A cena é um corredor horizontal de **2400 px de largura** × **640 px de altura**, montado em camadas com paralaxe. Cada camada é uma imagem com largura ≥ 2400 px (ou um tile horizontal repetível — declare `repeat: true` no manifest se for tile).

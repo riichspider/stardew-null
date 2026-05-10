@@ -55,6 +55,10 @@ html, body {
   font-size: 14px;
 }
 
+#hud.cutscene-hidden {
+  display: none;
+}
+
 .hud-top, .hud-bottom {
   display: flex;
   align-items: center;

@@ -142,3 +142,13 @@ export function isTitleOpen() { return !$('#title').classList.contains('hidden')
 export function isAnyOverlayOpen() {
   return isInventoryOpen() || isDialogOpen() || isTitleOpen();
 }
+
+// ---------- HUD visibility ----------
+//
+// The cutscene system takes over the canvas and renders its own cinematic
+// frames; the gameplay HUD (clock, money, energy, hotbar) is irrelevant
+// during a cutscene and would visually leak through. These two helpers
+// toggle a class on `#hud` that hides it via CSS.
+
+export function hideHUD() { $('#hud').classList.add('cutscene-hidden'); }
+export function showHUD() { $('#hud').classList.remove('cutscene-hidden'); }
