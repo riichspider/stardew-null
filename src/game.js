@@ -12,6 +12,7 @@ import { createPlayer, updatePlayer, hotspotInFront } from './player.js';
 import { createInventory } from './inventory.js';
 import * as UI from './ui.js';
 import { saveGame, loadGame } from './save.js';
+import { applyLighting } from './lighting.js';
 import {
   CANVAS_W, CANVAS_H,
   REAL_SECONDS_PER_GAME_MIN,
@@ -80,6 +81,8 @@ export class Game {
     this.running = false;
     this._raf = null;
     this._cameraX = 0;
+    this._tSec = 0;        // wall-clock seconds since boot, for lighting flicker
+    this._lastDt = 0;
   }
 
   start(state) {
@@ -91,6 +94,8 @@ export class Game {
       if (!this.running) return;
       const dt = Math.max(0, Math.min(0.05, (t - this.lastT) / 1000));
       this.lastT = t;
+      this._tSec += dt;
+      this._lastDt = dt;
       this.update(dt);
       this.render();
       Input.endFrame();
@@ -266,7 +271,10 @@ export class Game {
       this.drawLayer(layer, cx);
     }
 
-    // Pass 5: hotspot prompt
+    // Pass 5: noir lighting (additive point lights, rain, fog).
+    applyLighting(ctx, scene, cx, this._tSec, this._lastDt);
+
+    // Pass 6: hotspot prompt
     if (!UI.isAnyOverlayOpen()) {
       const hs = hotspotInFront(s.player, scene);
       if (hs) {
@@ -287,13 +295,14 @@ export class Game {
       }
     }
 
-    // Pass 6: ambient tint (cheap noir overlay; PR #6 swaps for real lights).
+    // Pass 7: ambient tint (cheap secondary tint on top of lighting; lets
+    // a scene desaturate or warm the whole frame without rebuilding lights).
     if (scene.ambient && scene.ambient.tint) {
       ctx.fillStyle = scene.ambient.tint;
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     }
 
-    // Pass 7: scene-transition flash
+    // Pass 8: scene-transition flash
     if (s.flash > 0) {
       ctx.fillStyle = `rgba(0,0,0,${Math.min(1, s.flash)})`;
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
