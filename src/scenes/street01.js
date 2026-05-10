@@ -154,7 +154,14 @@ export const street01 = {
     },
   ],
   npcs: [
-    // Empty for now; NPCs come with the dialog-tree PR.
+    // Test NPC: mysterious witness
+    {
+      id: 'witness',
+      x: 900,
+      y: 440,
+      label: 'Testemunha',
+      action: 'talk:witness_initial',
+    },
   ],
   // ---- Cinematic noir lighting ----
   lights: [

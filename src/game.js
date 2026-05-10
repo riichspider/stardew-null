@@ -14,6 +14,7 @@ import * as UI from './ui.js';
 import { saveGame, loadGame } from './save.js';
 import { applyLighting } from './lighting.js';
 import { collectEvidence, EVIDENCE } from './evidence.js';
+import { getDialog, startDialog, getAvailableChoices, selectChoice } from './dialogs.js';
 import {
   CANVAS_W, CANVAS_H,
   REAL_SECONDS_PER_GAME_MIN,
@@ -267,7 +268,18 @@ export class Game {
         return;
       }
       if (action === 'talk' || action.startsWith('talk:')) {
-        UI.showDialog(hotspot.label || '???', '...');
+        // Dialog tree from NPC
+        const dialogId = action.startsWith('talk:') ? action.slice(5) : null;
+        if (dialogId) {
+          const tree = startDialog(dialogId, s);
+          if (tree) {
+            UI.showDialogTree(tree, s);
+          } else {
+            UI.showDialog(hotspot.label || '???', '...');
+          }
+        } else {
+          UI.showDialog(hotspot.label || '???', '...');
+        }
         return;
       }
     }

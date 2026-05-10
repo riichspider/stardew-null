@@ -8,7 +8,8 @@ import { ITEMS } from './items.js';
 import { Audio } from './audio.js';
 import { HOTBAR_SIZE } from './inventory.js';
 import { EVIDENCE, getAvailableCombinations, tryCombineEvidence } from './evidence.js';
-import { saveGame } from './save.js';
+import { saveGame, setFlag } from './save.js';
+import { getDialog, DIALOGS } from './dialogs.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -86,13 +87,83 @@ export function showDialog(name, text, onClose) {
   el.classList.remove('hidden');
   el._onClose = onClose;
 }
+
+// ---------- Dialog Tree ----------
+
+let _currentDialog = null;
+let _dialogState = null;
+
+export function showDialogTree(tree, state) {
+  _currentDialog = tree;
+  _dialogState = state;
+  renderDialogNode(tree);
+}
+
+function renderDialogNode(node) {
+  const el = $('#dialog');
+  const nameEl = $('#dialog-name');
+  const textEl = $('#dialog-text');
+  const hintEl = $('#dialog-hint');
+  
+  nameEl.textContent = ''; // NPC name hidden for now
+  textEl.textContent = node.text;
+  
+  // Clear old choices
+  const oldChoices = el.querySelectorAll('.dialog-choice');
+  oldChoices.forEach(c => c.remove());
+  
+  // Show choices or hint
+  const choices = node.choices || [];
+  if (choices.length > 0) {
+    hintEl.textContent = ''; // Remove hint when there are choices
+    choices.forEach((choice, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'dialog-choice';
+      btn.textContent = choice.text;
+      btn.addEventListener('click', () => handleChoice(choice));
+      textEl.parentNode.appendChild(btn);
+    });
+  } else {
+    hintEl.textContent = '[Espaço] continuar';
+  }
+  
+  el.classList.remove('hidden');
+}
+
+function handleChoice(choice) {
+  if (!_currentDialog) return;
+  
+  // Apply choice effects
+  if (choice.setFlag) {
+    setFlag(choice.setFlag, true);
+  }
+  
+  // Navigate to next
+  if (choice.next) {
+    const nextNode = DIALOGS[choice.next];
+    if (nextNode) {
+      _currentDialog = nextNode;
+      renderDialogNode(nextNode);
+    } else {
+      hideDialog();
+    }
+  } else {
+    hideDialog();
+  }
+}
+
 export function hideDialog() {
   const el = $('#dialog');
   if (el.classList.contains('hidden')) return;
   el.classList.add('hidden');
+  // Clear choices
+  const choices = el.querySelectorAll('.dialog-choice');
+  choices.forEach(c => c.remove());
   const cb = el._onClose;
   el._onClose = null;
   if (cb) cb();
+  _currentDialog = null;
+  _dialogState = null;
 }
 export function isDialogOpen() { return !$('#dialog').classList.contains('hidden'); }
 

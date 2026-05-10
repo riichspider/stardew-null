@@ -10,6 +10,8 @@ import { Cutscene } from './cutscene.js';
 import { buildOpeningTimeline } from './cutscene-timeline.js';
 // Load evidence definitions (registers items into ITEMS)
 import './evidence.js';
+// Load dialog system
+import './dialogs.js';
 
 const canvas = document.getElementById('game');
 canvas.focus();
