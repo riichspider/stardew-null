@@ -1,5 +1,4 @@
 // Inventory: hotbar (9 slots) + bag (rest). Items stack up to ITEMS[id].stack.
-// Tools start in hotbar, take dedicated slots.
 
 import { ITEMS } from './items.js';
 
@@ -29,8 +28,6 @@ export function addItem(inv, id, qty = 1) {
     if (!inv.slots[i]) {
       const can = Math.min(def.stack, remaining);
       inv.slots[i] = { id, qty: can };
-      // tools get extra fields
-      if (def.tool === 'watering') inv.slots[i].water = 0;
       remaining -= can;
     }
   }

@@ -85,45 +85,24 @@ function canStandAt(px, py, world) {
   return isPassable(world, tx, ty);
 }
 
-// Returns one of: 'till','plant','water','chop','rock','cut','interact','none'.
-// Caller handles state changes.
-export function describeTargetAction(player, world, selectedItemDef, selectedItem) {
+// Returns the action available for the tile/object the player is facing.
+// Engine-level scaffold: only generic interactions remain. Tool-specific
+// actions (till/plant/water/etc) were removed with the farming gut and will
+// be replaced with noir gadgets and investigation interactions.
+export function describeTargetAction(player, world, _selectedItemDef, _selectedItem) {
   const { tx, ty } = tileInFront(player);
   const t = tileAt(world, tx, ty);
   if (t === -1) return { kind: 'none', tx, ty };
   const obj = objectAt(world, tx, ty);
 
   if (obj && obj.type === 'npc') return { kind: 'talk', tx, ty, obj };
-  if (t === T.SHOP_DOOR) return { kind: 'shop', tx, ty };
-  if (t === T.HOUSE_DOOR) return { kind: 'enter', tx, ty };
-  if (t === T.BED) return { kind: 'sleep', tx, ty };
-  if (t === T.CHEST) return { kind: 'chest', tx, ty };
+  if (t === T.BUILDING_DOOR) return { kind: 'enter', tx, ty };
 
-  if (selectedItemDef && selectedItemDef.tool === 'hoe') {
-    if (t === T.GRASS && !obj) return { kind: 'till', tx, ty };
-    if (t === T.TILLED && !obj) return { kind: 'untill', tx, ty };
-  }
-  if (selectedItemDef && selectedItemDef.tool === 'watering') {
-    if (t === T.WATER) return { kind: 'fill', tx, ty };
-    if ((t === T.TILLED || t === T.WATERED) && selectedItem && selectedItem.water > 0) return { kind: 'water', tx, ty };
-  }
-  if (selectedItemDef && selectedItemDef.tool === 'axe') {
-    if (obj && obj.type === 'tree') return { kind: 'chop', tx, ty, obj };
-    if (obj && obj.type === 'stump') return { kind: 'chopStump', tx, ty, obj };
-  }
-  if (selectedItemDef && selectedItemDef.tool === 'pickaxe') {
-    if (obj && obj.type === 'rock') return { kind: 'rock', tx, ty, obj };
-  }
-  if (selectedItemDef && selectedItemDef.tool === 'scythe') {
-    if (obj && (obj.type === 'weed' || obj.type === 'grassTuft')) return { kind: 'cut', tx, ty, obj };
-    if (obj && obj.type === 'crop' && obj.ready) return { kind: 'harvest', tx, ty, obj };
-  }
-  // Plant seed
-  if (selectedItemDef && selectedItemDef.plants) {
-    if ((t === T.TILLED || t === T.WATERED) && !obj) return { kind: 'plant', tx, ty };
-  }
-  // Harvest with bare hand
-  if (obj && obj.type === 'crop' && obj.ready) return { kind: 'harvest', tx, ty, obj };
-  // Pick up item-on-ground? skipping
+  // Bare-hands clearing — placeholder so the world has *some* interactivity
+  // before the real gadget actions land.
+  if (obj && obj.type === 'tree') return { kind: 'chop', tx, ty, obj };
+  if (obj && obj.type === 'stump') return { kind: 'chopStump', tx, ty, obj };
+  if (obj && obj.type === 'rock') return { kind: 'rock', tx, ty, obj };
+
   return { kind: 'none', tx, ty };
 }
