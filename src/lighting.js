@@ -36,12 +36,11 @@ function mulberry32(seed) {
 // pushing/popping per frame.
 const _rainPools = new Map();
 
-function getRainPool(sceneId, density, speed, length, rng) {
+function getRainPool(sceneId, density, speed, length, seed) {
   const key = `${sceneId}:${density}:${speed}:${length}`;
   if (_rainPools.has(key)) return _rainPools.get(key);
 
-  // density 0..1 → 40..220 drops. The viewport is 960×640 so this density
-  // is comfortable without choking the canvas.
+  const rng = mulberry32(seed);
   const count = Math.floor(40 + density * 180);
   const pool = new Array(count);
   for (let i = 0; i < count; i++) {
@@ -55,8 +54,9 @@ function getRainPool(sceneId, density, speed, length, rng) {
       splashX: 0,
     };
   }
-  _rainPools.set(key, pool);
-  return pool;
+  const entry = { pool, rng };
+  _rainPools.set(key, entry);
+  return entry;
 }
 
 function drawRain(ctx, scene, dt) {
@@ -68,8 +68,8 @@ function drawRain(ctx, scene, dt) {
   const color   = r.color || 'rgba(180, 200, 255, 0.35)';
   const groundY = scene.groundY;
 
-  const rng = mulberry32((scene.seed || 0) + 0xBEEF);
-  const pool = getRainPool(scene.id, density, speed, length, rng);
+  const seed = (scene.seed || 0) + 0xBEEF;
+  const { pool, rng } = getRainPool(scene.id, density, speed, length, seed);
 
   ctx.save();
   ctx.strokeStyle = color;
