@@ -83,6 +83,11 @@ export class Game {
     this._cameraX = 0;
     this._tSec = 0;        // wall-clock seconds since boot, for lighting flicker
     this._lastDt = 0;
+    // Active scene-change transition (or null when not transitioning).
+    //   { phase: 'out'|'in', t: secondsElapsed, duration, target, spawn }
+    // Player input is frozen and a black overlay is drawn for the whole
+    // duration; the scene swap happens at the boundary between phases.
+    this._transition = null;
   }
 
   start(state) {
@@ -195,6 +200,14 @@ export class Game {
       return;
     }
 
+    // While a transition is mid-fade, freeze the player and the clock so
+    // the world doesn't drift under the black overlay.
+    if (this._transition) {
+      this._advanceTransition(dt);
+      UI.updateHUD(s);
+      return;
+    }
+
     const scene = getScene(s.sceneId);
     updatePlayer(s.player, scene, dt);
     this.advanceTime(dt);
@@ -204,8 +217,9 @@ export class Game {
   }
 
   // ---------- Action / interact ----------
-  // Currently only door hotspots — dialog tree, evidence, gadgets land
-  // in subsequent PRs and slot in here.
+  // Door hotspots with `{ goto, spawn }` actions trigger a scene change.
+  // String actions ("enter:bar", "examine:desk", etc.) are surfaced as
+  // placeholder toasts until evidence/dialog/gadget PRs wire them up.
 
   useTool() {
     const s = this.state;
@@ -217,13 +231,88 @@ export class Game {
       Audio.step();
       return;
     }
-    if (hotspot.action && hotspot.action.startsWith('enter:')) {
-      const target = hotspot.action.slice(6);
-      UI.toast(`Porta para "${target}" — em breve.`);
-    } else if (hotspot.action === 'talk') {
-      UI.showDialog(hotspot.label || '???', '...');
-    } else {
-      UI.toast(hotspot.label || 'Interagir');
+
+    const action = hotspot.action;
+
+    // Object form: scene change.
+    if (action && typeof action === 'object' && typeof action.goto === 'string') {
+      this.changeScene(action.goto, action.spawn || 'default');
+      return;
+    }
+
+    // String form: placeholder verbs surfaced as toasts.
+    if (typeof action === 'string') {
+      if (action.startsWith('enter:')) {
+        const target = action.slice(6);
+        UI.toast(`Porta para "${target}" — em breve.`);
+        return;
+      }
+      if (action.startsWith('examine:')) {
+        UI.toast(`${hotspot.label || 'Examinar'} — em breve.`);
+        return;
+      }
+      if (action === 'talk' || action.startsWith('talk:')) {
+        UI.showDialog(hotspot.label || '???', '...');
+        return;
+      }
+    }
+
+    // Fallback: surface the label so the player gets feedback.
+    UI.toast(hotspot.label || 'Interagir');
+  }
+
+  // ---------- Scene transition ----------
+  // Two-phase fade. During phase 'out' the current scene is rendered with a
+  // growing black overlay; at the boundary the scene is swapped and the
+  // player is repositioned to the target scene's spawn; phase 'in' shrinks
+  // the overlay back to transparent. Player input is frozen the whole time.
+
+  changeScene(targetSceneId, spawn = 'default') {
+    if (this._transition) return; // already transitioning
+    // Validate target up-front so we surface bad scene IDs immediately
+    // instead of crashing mid-fade.
+    getScene(targetSceneId);
+    this._transition = {
+      phase: 'out',
+      t: 0,
+      duration: 0.35,
+      target: targetSceneId,
+      spawn,
+    };
+  }
+
+  _advanceTransition(dt) {
+    const tr = this._transition;
+    if (!tr) return;
+    tr.t += dt;
+    if (tr.phase === 'out' && tr.t >= tr.duration) {
+      // Swap scene at the boundary.
+      const s = this.state;
+      const newScene = getScene(tr.target);
+      s.sceneId = tr.target;
+      // Snap player to the requested spawn (or the scene's walkable centre).
+      let spawnX;
+      if (newScene.spawns && typeof newScene.spawns[tr.spawn] === 'number') {
+        spawnX = newScene.spawns[tr.spawn];
+      } else if (newScene.spawns && typeof newScene.spawns.default === 'number') {
+        spawnX = newScene.spawns.default;
+      } else {
+        spawnX = Math.floor((newScene.walkable[0] + newScene.walkable[1]) / 2);
+      }
+      s.player.x = Math.max(
+        newScene.walkable[0],
+        Math.min(newScene.walkable[1] - PLAYER_W, spawnX - PLAYER_W / 2),
+      );
+      s.player.y = newScene.groundY - PLAYER_H;
+      s.player.moving = false;
+      s.player.animFrame = 0;
+      s.player.animTime = 0;
+      // Persist immediately — this is a strong checkpoint.
+      saveGame(s);
+      tr.phase = 'in';
+      tr.t = 0;
+    } else if (tr.phase === 'in' && tr.t >= tr.duration) {
+      this._transition = null;
     }
   }
 
@@ -274,8 +363,9 @@ export class Game {
     // Pass 5: noir lighting (additive point lights, rain, fog).
     applyLighting(ctx, scene, cx, this._tSec, this._lastDt);
 
-    // Pass 6: hotspot prompt
-    if (!UI.isAnyOverlayOpen()) {
+    // Pass 6: hotspot prompt (suppressed during transitions so the
+    // outgoing scene's prompt doesn't blink while the screen fades).
+    if (!UI.isAnyOverlayOpen() && !this._transition) {
       const hs = hotspotInFront(s.player, scene);
       if (hs) {
         const lx = s.player.x + PLAYER_W / 2 - cx;
@@ -302,9 +392,18 @@ export class Game {
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     }
 
-    // Pass 8: scene-transition flash
+    // Pass 8: scene-transition flash (legacy day-recovery flash kept)
     if (s.flash > 0) {
       ctx.fillStyle = `rgba(0,0,0,${Math.min(1, s.flash)})`;
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    }
+
+    // Pass 9: scene-change transition overlay
+    if (this._transition) {
+      const tr = this._transition;
+      const k = Math.max(0, Math.min(1, tr.t / tr.duration));
+      const alpha = tr.phase === 'out' ? k : 1 - k;
+      ctx.fillStyle = `rgba(0, 0, 0, ${alpha.toFixed(3)})`;
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     }
   }

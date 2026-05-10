@@ -27,6 +27,11 @@ export const ASSET_MANIFEST = {
   'scene.street01.mid':    { url: 'assets/scenes/street01/mid.png' },
   'scene.street01.street': { url: 'assets/scenes/street01/street.png' },
   'scene.street01.fg':     { url: 'assets/scenes/street01/fg.png' },
+
+  // ---- Scene: apartment01 ----
+  'scene.apartment01.wall':  { url: 'assets/scenes/apartment01/wall.png' },
+  'scene.apartment01.floor': { url: 'assets/scenes/apartment01/floor.png' },
+  'scene.apartment01.props': { url: 'assets/scenes/apartment01/props.png' },
 };
 
 function loadImage(url) {
