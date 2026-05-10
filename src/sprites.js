@@ -346,6 +346,238 @@ export function makeForegroundLayer(width, height = CANVAS_H, seed = 71, groundY
   return c;
 }
 
+// ---------- Interior layer generators (procedural fallback) ----------
+//
+// Used by indoor scenes (apartment, bar, basement). The interior wall sits
+// behind the player and a foreground prop strip can sit in front. Lighting
+// (desk lamp, pendant, fireplace) is added by the scene as point lights —
+// these generators only paint the static silhouettes.
+
+export function makeInteriorWallLayer(width, height = CANVAS_H, seed = 91, groundY = 480) {
+  const c = mkCanvas(width, height);
+  const g = c.getContext('2d');
+  const r = mulberry32(seed);
+
+  // ceiling band (deep shadow)
+  g.fillStyle = '#0a0a0e';
+  g.fillRect(0, 0, width, 80);
+
+  // wallpaper — vertical stripes of damp greenish-blue
+  const wallTop = 80;
+  const wallH = groundY - wallTop;
+  const wallpaperBase = '#1a1820';
+  const wallpaperAlt = '#1f1c26';
+  for (let x = 0; x < width; x += 6) {
+    g.fillStyle = (Math.floor(x / 6) % 2 === 0) ? wallpaperBase : wallpaperAlt;
+    g.fillRect(x, wallTop, 6, wallH);
+  }
+
+  // baseboard (dark wood)
+  g.fillStyle = '#0e0a08';
+  g.fillRect(0, groundY - 12, width, 12);
+  g.fillStyle = '#1a120c';
+  g.fillRect(0, groundY - 12, width, 1);
+
+  // wall sconces — a few framed pictures and stains
+  for (let x = 40; x < width - 40; x += 130 + Math.floor(r() * 80)) {
+    const kind = r();
+    const fy = wallTop + 30 + Math.floor(r() * 40);
+    if (kind < 0.5) {
+      // picture frame
+      const fw = 24 + Math.floor(r() * 24);
+      const fh = 18 + Math.floor(r() * 18);
+      g.fillStyle = '#0a0a0e';
+      g.fillRect(x - fw / 2 - 2, fy - 2, fw + 4, fh + 4);
+      g.fillStyle = '#5a3a1a';
+      g.fillRect(x - fw / 2, fy, fw, fh);
+      g.fillStyle = '#1a1018';
+      g.fillRect(x - fw / 2 + 2, fy + 2, fw - 4, fh - 4);
+    } else if (kind < 0.8) {
+      // damp stain
+      g.fillStyle = 'rgba(40, 28, 16, 0.4)';
+      g.beginPath();
+      g.ellipse(x, fy + 12, 18, 22, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+
+  // crown molding line
+  g.fillStyle = '#2a1810';
+  g.fillRect(0, wallTop, width, 2);
+
+  return c;
+}
+
+export function makeInteriorFloorLayer(width, height = CANVAS_H, seed = 97, groundY = 480) {
+  const c = mkCanvas(width, height);
+  const g = c.getContext('2d');
+  const r = mulberry32(seed);
+
+  // wood floor planks
+  const plankH = 18;
+  for (let y = groundY; y < height; y += plankH) {
+    const baseTone = (Math.floor((y - groundY) / plankH) % 2 === 0) ? '#1a1208' : '#231810';
+    g.fillStyle = baseTone;
+    g.fillRect(0, y, width, plankH);
+
+    // plank seams
+    for (let x = 0; x < width; x += 60 + Math.floor(r() * 50)) {
+      g.fillStyle = '#0a0606';
+      g.fillRect(x, y, 1, plankH);
+    }
+
+    // grain streaks
+    g.fillStyle = 'rgba(255, 200, 140, 0.04)';
+    for (let i = 0; i < 6; i++) {
+      const sx = Math.floor(r() * width);
+      const sw = 12 + Math.floor(r() * 30);
+      g.fillRect(sx, y + 2 + Math.floor(r() * (plankH - 4)), sw, 1);
+    }
+  }
+
+  // floor edge under baseboard
+  g.fillStyle = '#0a0608';
+  g.fillRect(0, groundY, width, 2);
+
+  // a few warm glow pools (where interior lights will sit) — baked at low alpha
+  // so even without point-light bloom they read as "lit".
+  g.fillStyle = 'rgba(255, 180, 80, 0.06)';
+  for (let i = 0; i < 4; i++) {
+    const px = Math.floor(r() * width);
+    g.beginPath();
+    g.ellipse(px, groundY + 16, 60, 6, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  return c;
+}
+
+export function makeInteriorPropsLayer(width, height = CANVAS_H, seed = 103, groundY = 480) {
+  const c = mkCanvas(width, height);
+  const g = c.getContext('2d');
+  const r = mulberry32(seed);
+
+  // single bed against the wall (left third)
+  const bedX = 80;
+  const bedY = groundY - 36;
+  g.fillStyle = '#3a2a1a';
+  g.fillRect(bedX, bedY, 110, 32);
+  // mattress
+  g.fillStyle = '#5a4030';
+  g.fillRect(bedX + 4, bedY - 6, 102, 8);
+  // pillow
+  g.fillStyle = '#a09080';
+  g.fillRect(bedX + 6, bedY - 6, 26, 6);
+  g.fillStyle = '#704028';
+  g.fillRect(bedX + 32, bedY - 4, 70, 5);
+  // headboard
+  g.fillStyle = '#1a1008';
+  g.fillRect(bedX, bedY - 24, 8, 30);
+
+  // rug (under the desk)
+  const rugX = 360;
+  g.fillStyle = '#5a1818';
+  g.fillRect(rugX, groundY - 2, 220, 6);
+  g.fillStyle = '#3a0c0c';
+  for (let xx = rugX; xx < rugX + 220; xx += 10) {
+    if (Math.floor((xx - rugX) / 10) % 2 === 0) g.fillRect(xx, groundY - 2, 5, 6);
+  }
+
+  // detective desk (center-right)
+  const deskX = 420;
+  const deskY = groundY - 40;
+  g.fillStyle = '#1a1208';
+  g.fillRect(deskX, deskY, 130, 40);
+  g.fillStyle = '#2a1810';
+  g.fillRect(deskX, deskY, 130, 4);
+  // drawer hints
+  g.fillStyle = '#0a0604';
+  g.fillRect(deskX + 6, deskY + 10, 56, 1);
+  g.fillRect(deskX + 6, deskY + 22, 56, 1);
+  // desk lamp base + neck
+  g.fillStyle = '#2a1a10';
+  g.fillRect(deskX + 14, deskY - 18, 6, 18);
+  g.fillStyle = '#3a2818';
+  g.fillRect(deskX + 6, deskY - 24, 22, 8);
+  // lampshade — warm light source visible
+  g.fillStyle = '#ffaa3a';
+  g.fillRect(deskX + 9, deskY - 22, 16, 5);
+
+  // typewriter on desk
+  g.fillStyle = '#1a1a22';
+  g.fillRect(deskX + 70, deskY - 14, 38, 14);
+  g.fillStyle = '#2a2a32';
+  g.fillRect(deskX + 74, deskY - 18, 30, 4);
+  // paper sticking up
+  g.fillStyle = '#c8c0a8';
+  g.fillRect(deskX + 86, deskY - 26, 8, 8);
+
+  // chair
+  g.fillStyle = '#1a1208';
+  g.fillRect(deskX + 50, groundY - 24, 24, 24);
+  g.fillStyle = '#2a1810';
+  g.fillRect(deskX + 50, groundY - 24, 24, 4);
+
+  // file cabinet (right of desk)
+  const cabX = 600;
+  const cabY = groundY - 70;
+  g.fillStyle = '#2a2630';
+  g.fillRect(cabX, cabY, 40, 70);
+  g.fillStyle = '#1a1620';
+  g.fillRect(cabX, cabY, 40, 2);
+  for (let dy = 0; dy < 3; dy++) {
+    g.fillStyle = '#0a0a10';
+    g.fillRect(cabX + 4, cabY + 8 + dy * 22, 32, 1);
+    g.fillStyle = '#3a3a44';
+    g.fillRect(cabX + 18, cabY + 14 + dy * 22, 4, 2);
+  }
+
+  // bookshelf (right wall)
+  const shelfX = 720;
+  const shelfY = groundY - 120;
+  g.fillStyle = '#1a1208';
+  g.fillRect(shelfX, shelfY, 90, 120);
+  for (let row = 0; row < 4; row++) {
+    const ry = shelfY + 8 + row * 28;
+    g.fillStyle = '#0a0604';
+    g.fillRect(shelfX + 2, ry + 22, 86, 2);
+    // book spines
+    let bx = shelfX + 4;
+    while (bx < shelfX + 86) {
+      const bw = 3 + Math.floor(r() * 5);
+      const palette = ['#5a1818', '#1a3a5a', '#3a5a1a', '#5a3a1a', '#3a1a5a'];
+      g.fillStyle = palette[Math.floor(r() * palette.length)];
+      g.fillRect(bx, ry, bw, 22);
+      bx += bw;
+    }
+  }
+
+  // exit door (left wall — this is the doorway back to the street)
+  const doorX = 30;
+  const doorY = groundY - 90;
+  g.fillStyle = '#0a0608';
+  g.fillRect(doorX - 4, doorY - 4, 50, 94);
+  g.fillStyle = '#3a2818';
+  g.fillRect(doorX, doorY, 42, 90);
+  // door panels
+  g.fillStyle = '#2a1810';
+  g.fillRect(doorX + 4, doorY + 6, 34, 38);
+  g.fillRect(doorX + 4, doorY + 48, 34, 36);
+  // handle
+  g.fillStyle = '#a87a3a';
+  g.fillRect(doorX + 34, doorY + 50, 3, 3);
+
+  // clutter on floor (sparse trash, files)
+  for (let i = 0; i < 5; i++) {
+    const px = 220 + Math.floor(r() * (width - 280));
+    g.fillStyle = '#2a2018';
+    g.fillRect(px, groundY - 4, 8, 4);
+    g.fillStyle = '#1a1208';
+    g.fillRect(px, groundY - 4, 8, 1);
+  }
+
+  return c;
+}
+
 // ---------- Build all sprites ----------
 
 export function buildSprites() {

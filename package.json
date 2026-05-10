@@ -7,7 +7,7 @@
   "scripts": {
     "start": "python3 -m http.server 5173",
     "dev": "python3 -m http.server 5173",
-    "lint": "node --check src/main.js && node --check src/game.js && node --check src/scenes.js && node --check src/scenes/street01.js && node --check src/player.js && node --check src/sprites.js && node --check src/lighting.js && node --check src/assets.js && node --check src/items.js && node --check src/inventory.js && node --check src/ui.js && node --check src/audio.js && node --check src/input.js && node --check src/save.js && node --check src/config.js"
+    "lint": "node --check src/main.js && node --check src/game.js && node --check src/scenes.js && node --check src/scenes/street01.js && node --check src/scenes/apartment01.js && node --check src/player.js && node --check src/sprites.js && node --check src/lighting.js && node --check src/assets.js && node --check src/items.js && node --check src/inventory.js && node --check src/ui.js && node --check src/audio.js && node --check src/input.js && node --check src/save.js && node --check src/config.js"
   },
   "engines": {
     "node": ">=18"

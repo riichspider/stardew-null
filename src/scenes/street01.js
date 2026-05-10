@@ -95,6 +95,21 @@ export const street01 = {
   width: SCENE_WIDTH,
   groundY: GROUND_Y,
   walkable: [40, SCENE_WIDTH - 40],
+
+  // Where the player lands when entering via Game.changeScene(). The
+  // exterior door of the apartment building sits at scene-X 680, so the
+  // matching `apartment_return` spawn places the player a few px to the
+  // right of that door so they're not standing inside the hotspot.
+  spawns: {
+    default:           Math.floor((40 + (SCENE_WIDTH - 40)) / 2),
+    // Land just past the right edge of each door hotspot so the player
+    // appears right next to the door but doesn't immediately re-trigger
+    // the entrance prompt (door zones are 60px wide starting at the X
+    // listed under hotspots).
+    apartment_return:  760,
+    bar_return:        1720,
+  },
+
   layers: [
     { id: 'sky',    parallax: 0.10, get: () => pickLayer('scene.street01.sky',    'sky') },
     { id: 'far',    parallax: 0.40, get: () => pickLayer('scene.street01.far',    'far') },
@@ -103,9 +118,24 @@ export const street01 = {
     { id: 'fg',     parallax: 1.20, get: () => pickLayer('scene.street01.fg',     'fg') },
   ],
   hotspots: [
-    // Placeholder hotspots — wired up to dialog/door actions in PR #7+.
-    { id: 'apartment_door', x: 680,  w: 60, label: 'Entrar no prédio', action: 'enter:apartment' },
-    { id: 'bar_door',       x: 1640, w: 60, label: 'Entrar no bar',    action: 'enter:bar' },
+    // The apartment door is fully wired — interacting triggers a scene
+    // change to apartment01 with a fade transition.
+    {
+      id: 'apartment_door',
+      x: 680,
+      w: 60,
+      label: 'Entrar no prédio',
+      action: { goto: 'apartment01', spawn: 'entrance' },
+    },
+    // The bar interior doesn't exist yet — keep as a toast placeholder
+    // until a future PR adds bar01.
+    {
+      id: 'bar_door',
+      x: 1640,
+      w: 60,
+      label: 'Entrar no bar',
+      action: 'enter:bar',
+    },
   ],
   npcs: [
     // Empty for now; NPCs come with the dialog-tree PR.
