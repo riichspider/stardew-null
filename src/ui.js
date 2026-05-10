@@ -148,17 +148,27 @@ export function showInventory(state, combineMode = null) {
       
       // Click handler
       cell.addEventListener('click', () => {
-        if (isEvidence && def.combinableWith && def.combinableWith.length > 0) {
-          // Enter combine mode with this item
+        if (_combineMode && _combineMode.slotA !== i) {
+          const result = tryCombineEvidence(state, _combineMode.slotA, i);
+          _combineMode = null;
+          if (result && result.success) {
+            saveGame(state);
+          }
+          showInventory(state);
+        } else if (_combineMode && _combineMode.slotA === i) {
+          _combineMode = null;
+          showInventory(state);
+        } else if (isEvidence && def.combinableWith && def.combinableWith.length > 0) {
           showInventory(state, { slotA: i });
         } else if (i < HOTBAR_SIZE) {
           inv.selected = i;
+          showInventory(state, _combineMode);
         } else {
           const tmp = inv.slots[inv.selected];
           inv.slots[inv.selected] = s;
           inv.slots[i] = tmp;
+          showInventory(state, _combineMode);
         }
-        showInventory(state, _combineMode);
       });
       
       // Right-click: show evidence detail (zoom)
