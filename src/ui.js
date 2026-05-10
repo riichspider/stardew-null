@@ -9,7 +9,7 @@ import { Audio } from './audio.js';
 import { HOTBAR_SIZE } from './inventory.js';
 import { EVIDENCE, getAvailableCombinations, tryCombineEvidence } from './evidence.js';
 import { saveGame, setFlag } from './save.js';
-import { getDialog, DIALOGS } from './dialogs.js';
+import { getDialog, advanceNode, DIALOGS } from './dialogs.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -152,11 +152,21 @@ function handleChoice(choice) {
   }
 }
 
+export function advanceOrCloseDialog() {
+  if (!_currentDialog) return;
+  const nextNode = advanceNode(_currentDialog);
+  if (nextNode) {
+    _currentDialog = nextNode;
+    renderDialogNode(nextNode);
+  } else {
+    hideDialog();
+  }
+}
+
 export function hideDialog() {
   const el = $('#dialog');
   if (el.classList.contains('hidden')) return;
   el.classList.add('hidden');
-  // Clear choices
   const choices = el.querySelectorAll('.dialog-choice');
   choices.forEach(c => c.remove());
   const cb = el._onClose;

@@ -203,7 +203,7 @@ export class Game {
     // hotspot opens the door / talks to the NPC / examines evidence.
     const interact = Input.consumePress('action') || Input.consumePress('up');
     if (interact) {
-      if (UI.isDialogOpen()) UI.hideDialog();
+      if (UI.isDialogOpen()) UI.advanceOrCloseDialog();
       else if (!UI.isAnyOverlayOpen()) {
         // First check for hotspot/NPC interaction
         const scene = getScene(s.sceneId);

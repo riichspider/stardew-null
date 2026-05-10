@@ -77,14 +77,21 @@ export function startDialog(treeId, state) {
 }
 
 export function selectChoice(choice, state) {
-  // Set flag if any
   if (choice.setFlag) {
     setFlag(choice.setFlag, true);
   }
-  
-  // Get next node
   if (choice.next) {
     return DIALOGS[choice.next];
+  }
+  return null;
+}
+
+export function advanceNode(node) {
+  if (node.setFlag) {
+    setFlag(node.setFlag, true);
+  }
+  if (node.next) {
+    return DIALOGS[node.next] || null;
   }
   return null;
 }
