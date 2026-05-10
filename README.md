@@ -79,7 +79,7 @@ Para mudar tamanho do mundo, duração do dia, energia inicial, dinheiro inicial
 
 ## Histórico
 
-Esse repo nasceu como um mini-Stardew (PR #1). Depois passou por um cleanup (PR #3 — `config.js`, fix de path bloqueado por árvore, scripts npm). Agora está sendo gutado para virar engine-only ([este PR]) e seguir para o noir RPG nos PRs seguintes.
+Esse repo nasceu como um mini-Stardew (PR #1). Depois passou por um cleanup (PR #3 — `config.js`, fix de path bloqueado por árvore, scripts npm). Agora está sendo gutado para virar engine-only (este PR) e seguir para o noir RPG nos PRs seguintes.
 
 ## Licença
 
