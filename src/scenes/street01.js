@@ -66,12 +66,13 @@ const STREET_LAMPS = LAMP_XS.map((x, i) => ({
 // for mid-buildings paints a few coloured strips at deterministic positions;
 // these halo entries sit at those positions so the signs visibly bloom.
 const NEON_SIGNS = [
-  { id: 'neon_pink_a',  x: 280,  y: 280, parallax: 0.80, color: PALETTE.neonPink,  radius: 130, intensity: 0.60, flicker: { rate: 9.0,  seed: 0.4 } },
-  { id: 'neon_cyan_a',  x: 720,  y: 240, parallax: 0.80, color: PALETTE.neonCyan,  radius: 140, intensity: 0.55, flicker: { rate: 7.5,  seed: 1.2 } },
-  { id: 'neon_pink_b',  x: 1180, y: 300, parallax: 0.80, color: PALETTE.neonPink,  radius: 120, intensity: 0.55, flicker: { rate: 8.2,  seed: 2.1 } },
-  { id: 'neon_amber_a', x: 1520, y: 250, parallax: 0.80, color: PALETTE.neonAmber, radius: 130, intensity: 0.60, flicker: { rate: 10.4, seed: 3.0 } },
-  { id: 'neon_red_a',   x: 1900, y: 290, parallax: 0.80, color: PALETTE.neonRed,   radius: 120, intensity: 0.55, flicker: { rate: 6.6,  seed: 3.8 } },
-  { id: 'neon_cyan_b',  x: 2240, y: 260, parallax: 0.80, color: PALETTE.neonCyan,  radius: 130, intensity: 0.55, flicker: { rate: 11.2, seed: 4.9 } },
+  { id: 'neon_pink_a',  x: 156,  y: 336, parallax: 0.80, color: PALETTE.neonPink,  radius: 130, intensity: 0.60, flicker: { rate: 9.0,  seed: 0.4 } },
+  { id: 'neon_amber_a', x: 298,  y: 263, parallax: 0.80, color: PALETTE.neonAmber, radius: 130, intensity: 0.60, flicker: { rate: 10.4, seed: 1.2 } },
+  { id: 'neon_pink_b',  x: 513,  y: 268, parallax: 0.80, color: PALETTE.neonPink,  radius: 120, intensity: 0.55, flicker: { rate: 8.2,  seed: 2.1 } },
+  { id: 'neon_red_a',   x: 950,  y: 325, parallax: 0.80, color: PALETTE.neonRed,   radius: 120, intensity: 0.55, flicker: { rate: 6.6,  seed: 3.0 } },
+  { id: 'neon_red_b',   x: 1104, y: 424, parallax: 0.80, color: PALETTE.neonRed,   radius: 120, intensity: 0.55, flicker: { rate: 7.5,  seed: 3.8 } },
+  { id: 'neon_cyan_a',  x: 1208, y: 277, parallax: 0.80, color: PALETTE.neonCyan,  radius: 140, intensity: 0.55, flicker: { rate: 11.2, seed: 4.9 } },
+  { id: 'neon_pink_c',  x: 1970, y: 292, parallax: 0.80, color: PALETTE.neonPink,  radius: 130, intensity: 0.55, flicker: { rate: 9.8,  seed: 5.7 } },
 ];
 
 // Storefront window glow — small warm halos at the storefront row, baked
