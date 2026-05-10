@@ -48,10 +48,11 @@ function getRainPool(sceneId, density, speed, length, rng) {
     pool[i] = {
       x: rng() * CANVAS_W,
       y: rng() * CANVAS_H,
-      vx: speed * 0.25,        // slight horizontal drift (looks like wind)
+      vx: speed * 0.25,
       vy: speed * (0.85 + rng() * 0.3),
       len: length * (0.7 + rng() * 0.6),
       splash: 0,
+      splashX: 0,
     };
   }
   _rainPools.set(key, pool);
@@ -84,6 +85,7 @@ function drawRain(ctx, scene, dt) {
     d.y += d.vy * dt;
     if (d.y >= groundY) {
       d.splash = 0.18;
+      d.splashX = d.x;
       d.x = rng() * CANVAS_W;
       d.y = -10 - rng() * 60;
       continue;
@@ -102,7 +104,7 @@ function drawRain(ctx, scene, dt) {
       const a = d.splash / 0.18;
       ctx.globalAlpha = a * 0.6;
       ctx.beginPath();
-      ctx.arc(d.x, groundY, 2.5 * (1 - a) + 0.5, 0, Math.PI * 2);
+      ctx.arc(d.splashX, groundY, 2.5 * (1 - a) + 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
   }
