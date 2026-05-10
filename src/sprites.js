@@ -307,6 +307,18 @@ export function makeStreetLayer(width, height = CANVAS_H, seed = 53, groundY = 5
   return c;
 }
 
+export function getForegroundLampXPositions(width, seed = 71) {
+  const r = mulberry32(seed);
+  const lamps = [];
+  for (let x = 60; x < width; x += 160 + Math.floor(r() * 80)) {
+    const kind = r();
+    if (kind < 0.5) {
+      lamps.push(x);
+    }
+  }
+  return lamps;
+}
+
 export function makeForegroundLayer(width, height = CANVAS_H, seed = 71, groundY = 540) {
   const c = mkCanvas(width, height);
   const g = c.getContext('2d');

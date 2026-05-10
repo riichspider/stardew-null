@@ -15,6 +15,7 @@ import {
   makeMidBuildingsLayer,
   makeStreetLayer,
   makeForegroundLayer,
+  getForegroundLampXPositions,
 } from '../sprites.js';
 
 const SCENE_WIDTH = 2400;
@@ -42,20 +43,13 @@ function pickLayer(assetId, fallbackKey) {
   return buildLayers()[fallbackKey];
 }
 
-// Lights are placed in scene-space (x, y in scene coordinates). The lighting
-// pass reads `parallax` per-light; foreground props (lamps, hydrants) sit in
-// the fg layer (parallax 1.20), while neon signs are baked into the mid layer
-// (parallax 0.80) so their halos must scroll at those rates to feel attached.
-//
-// The lamp post X positions match `makeForegroundLayer(seed=71, …)` —
-// changing the seed there means re-listing them here.
-const LAMP_XS = [120, 360, 600, 840, 1080, 1320, 1560, 1800, 2040, 2280];
+const LAMP_XS = getForegroundLampXPositions(SCENE_WIDTH, 71);
 
 const STREET_LAMPS = LAMP_XS.map((x, i) => ({
   id: `lamp_${i}`,
-  x,
-  y: GROUND_Y - 96,           // lamp head height
-  parallax: 1.20,             // matches fg layer
+  x: x + 1,
+  y: GROUND_Y - 112,
+  parallax: 1.20,
   color: PALETTE.neonAmber,
   radius: 110,
   intensity: 0.55,
