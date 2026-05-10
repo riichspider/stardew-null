@@ -87,11 +87,13 @@ startBtn.addEventListener('click', startNew);
 continueBtn.addEventListener('click', continueSave);
 replayBtn.addEventListener('click', replayCutscene);
 
-// Title-screen keyboard: Space starts a new game (or continues if save exists)
+// Title-screen keyboard: Space / Enter mirror the visible "Começar [Espaço]"
+// button — they always trigger a new game (which plays the opening cutscene).
+// Continuing a save is a deliberate mouse-click on "Continuar save", so we
+// don't shortcut it here.
 window.addEventListener('keydown', (e) => {
   if (UI.isTitleOpen() && (e.code === 'Space' || e.code === 'Enter')) {
     e.preventDefault();
-    if (hasSave()) continueSave();
-    else startNew();
+    startNew();
   }
 });
