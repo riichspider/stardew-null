@@ -15,6 +15,7 @@ import { setFlag, getFlag } from './save.js';
 export const GADGETS = {
   gadget_lantern: {
     gadget: true,
+    stack: 1,
     icon: '🔦',
     name: 'Lanterna UV',
     description: 'Luz UV revela coisas invisíveis. Use em áreas escuras.',
@@ -22,6 +23,7 @@ export const GADGETS = {
   },
   gadget_recorder: {
     gadget: true,
+    stack: 1,
     icon: '🎤',
     name: 'Gravador',
     description: 'Grava interrogations. Use ao falar com NPCs.',
@@ -29,12 +31,14 @@ export const GADGETS = {
   },
   gadget_scanner: {
     gadget: true,
+    stack: 1,
     icon: '📡',
     name: 'Scanner',
     description: 'Escaneia sinais eletrônicos próximos.',
   },
   gadget_taser: {
     gadget: true,
+    stack: 1,
     icon: '⚡',
     name: 'Taser',
     description: 'Defesa pessoal. Use em emergências.',
