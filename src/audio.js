@@ -60,16 +60,13 @@ export const Audio = {
   setMuted(v) { muted = !!v; },
   isMuted() { return muted; },
 
+  // Generic SFX kept after the farming gut. Farm-specific cues (till, water,
+  // plant, buy, sell) were removed; the noir-RPG SFX (footsteps on wet
+  // pavement, gadget beeps, neon hum, ricochets, etc) will be added later.
   step()       { tone({ freq: 220 + Math.random() * 80, dur: 0.04, type: 'square', vol: 0.04 }); },
-  till()       { noise({ freq: 380, dur: 0.18, vol: 0.18 }); tone({ freq: 220, dur: 0.1, type: 'square', vol: 0.06, slide: -60 }); },
-  water()      { noise({ freq: 1500, dur: 0.25, vol: 0.1, q: 3 }); },
-  plant()      { tone({ freq: 660, dur: 0.08, type: 'triangle', vol: 0.12 }); tone({ freq: 880, dur: 0.06, type: 'triangle', vol: 0.08, slide: 40 }); },
   chop()       { noise({ freq: 600, dur: 0.12, vol: 0.18 }); tone({ freq: 140, dur: 0.1, type: 'sawtooth', vol: 0.08 }); },
   rock()       { noise({ freq: 220, dur: 0.18, vol: 0.2 }); },
-  cut()        { noise({ freq: 2400, dur: 0.06, vol: 0.12 }); },
   pickup()     { tone({ freq: 880, dur: 0.06, type: 'square', vol: 0.1 }); tone({ freq: 1320, dur: 0.06, type: 'square', vol: 0.08, slide: 80 }); },
-  buy()        { tone({ freq: 660, dur: 0.08, type: 'square', vol: 0.12 }); tone({ freq: 990, dur: 0.08, type: 'square', vol: 0.1, slide: 60 }); },
-  sell()       { tone({ freq: 540, dur: 0.06, type: 'triangle', vol: 0.12 }); tone({ freq: 720, dur: 0.06, type: 'triangle', vol: 0.1, slide: -40 }); },
   cantDo()     { tone({ freq: 180, dur: 0.12, type: 'square', vol: 0.1, slide: -40 }); },
   newDay()     { tone({ freq: 523, dur: 0.16, type: 'sine', vol: 0.1 }); setTimeout(() => tone({ freq: 659, dur: 0.16, type: 'sine', vol: 0.1 }), 120); setTimeout(() => tone({ freq: 784, dur: 0.24, type: 'sine', vol: 0.1 }), 240); },
   faint()      { tone({ freq: 220, dur: 0.4, type: 'sawtooth', vol: 0.12, slide: -150 }); },

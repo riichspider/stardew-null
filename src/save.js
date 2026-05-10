@@ -1,21 +1,21 @@
 // localStorage save/load.
+//
+// Save key bumped to v2 with the farming gut so older v1 farming saves don't
+// get half-loaded into the engine-only state shape.
 
-const KEY = 'stardew-null:save:v1';
+const KEY = 'stardew-null:save:v2';
 
 export function saveGame(state) {
   try {
     const payload = {
-      version: 1,
+      version: 2,
       ts: Date.now(),
       money: state.money,
       energy: state.energy,
       energyMax: state.energyMax,
       day: state.day,
-      season: state.season,
-      year: state.year,
       hour: state.hour,
       minute: state.minute,
-      weather: state.weather,
       inventory: state.inventory,
       player: { x: state.player.x, y: state.player.y, dir: state.player.dir },
       tiles: Array.from(state.world.tiles),

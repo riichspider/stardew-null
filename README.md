@@ -1,15 +1,38 @@
-# Stardew Null
+# Pixel Engine (ex-Stardew Null)
 
-Um mini-jogo de fazenda inspirado em Stardew Valley, feito em **JavaScript puro** (sem frameworks, sem bundlers, sem assets externos). Tudo é desenhado proceduralmente em canvas — incluindo sprites, áudio e o mapa do mundo.
+Esqueleto de jogo 2D em **JavaScript puro** (sem frameworks, sem bundlers, sem assets externos). Tudo é desenhado proceduralmente em canvas — sprites, áudio e o mapa do mundo. Originalmente um clone mini de Stardew Valley; agora foi reduzido a um motor genérico que vai virar um **RPG noir de investigação inspirado em Blade Runner**, em PRs incrementais.
 
 > Demo ao vivo: https://stardew-clone-rfhmzkbr.devinapps.com
 
-## Como jogar
+## Status atual
+
+**Funcional hoje**
+
+- Mapa tile-based (50×32 tiles) com grama, cerca, lago e caminho
+- Movimento 4-direcional com animação de caminhada e sombra suave
+- Ciclo dia/noite com tinta noturna progressiva (rollover automático às 02h)
+- Inventário + hotbar (9 slots) com seleção via `1`–`9`
+- HUD: relógio (Dia N — HH:MM), dinheiro, barra de energia
+- Diálogo com NPC (placeholder, sem árvore de escolhas ainda)
+- Save/load automático ao virar o dia (localStorage, chave `stardew-null:save:v2`)
+- Árvores e pedras placeholder com cortar/quebrar (geram madeira/pedra)
+- SFX procedurais via WebAudio
+- Camera, render por Y-sort, action-target highlighter
+
+**A construir (PRs futuros)**
+
+- Árvore de diálogo com escolhas que mudam o estado do mundo
+- Sistema de pistas / evidências / case file
+- Gadgets de investigação (lanterna UV, scanner, gravador, taser)
+- Lighting cinemático: chuva animada, neon, point lights, fog volumétrico
+- Combate em tempo real (mira + uso de gadgets)
+- Cidade noir gerada (quarteirões, becos, prédios com interior)
+
+## Como rodar
 
 Qualquer servidor estático moderno serve. Não há build step, dependências ou bundler.
 
 ```bash
-# Opção rápida (precisa de Python 3 instalado):
 npm start            # equivalente a: python3 -m http.server 5173
 # ou diretamente:
 python3 -m http.server 5173
@@ -26,57 +49,37 @@ npm run lint         # checa sintaxe de todos os módulos com `node --check`
 | Tecla | Ação |
 |------:|:-----|
 | `WASD` / setas | andar |
-| `Espaço` | usar ferramenta · interagir · avançar diálogo |
+| `Espaço` | interagir · avançar diálogo |
 | `1`–`9` | selecionar slot da hotbar |
 | `I` | abrir inventário |
 | `ESC` | fechar menu |
-
-## Mecânicas implementadas
-
-- Mapa tile-based (50×32 tiles) com casa, loja, lago, floresta e fazenda
-- Movimento 4-direcional com animação de caminhada
-- Ferramentas: enxada, regador, machado, picareta, foice
-- Cultivos: arar → plantar semente → regar → colher
-- 7 culturas com estágios visuais e estações próprias (pastinaca, batata, couve-flor, melão, tomate, milho, abóbora)
-- Regrow para tomate e milho
-- Árvores corta-com-machado (3 acertos → 4 madeiras), pedras quebráveis (2 acertos → 2 pedras)
-- Mato e tufos cortáveis com a foice (dropam fibra/feno)
-- Inventário + hotbar com 27 slots, equipar com clique
-- Loja com NPC (Pierre): comprar sementes da estação, vender colheitas
-- Energia (gasta a cada ação) e desmaio se zerar / passar das 02h
-- Ciclo dia/noite com tinta noturna progressiva
-- Estações de 28 dias (primavera → verão → outono → inverno → ano+1)
-- Save/load automático ao dormir (localStorage)
-- HUD: relógio, dinheiro, energia, hotbar, clima
-- SFX procedurais via WebAudio (sem assets externos)
 
 ## Arquitetura
 
 ```
 stardew-clone/
-├── index.html        # canvas + overlays HTML
-├── styles.css        # HUD, menus
+├── index.html        # canvas + overlays HTML (HUD, dialog, inventory, title)
+├── styles.css        # estilo dos overlays
 └── src/
     ├── main.js       # boot
     ├── config.js     # constantes de balance (mundo, tempo, energia, dinheiro)
-    ├── game.js       # game loop + render
+    ├── game.js       # game loop, update, render, day/night, save/load orchestration
     ├── world.js      # mapa, tiles, objetos
-    ├── player.js     # movimento, animação, mira
+    ├── player.js     # movimento, animação, target picking
     ├── sprites.js    # sprites pixel-art proceduriais
     ├── items.js      # registro de itens
-    ├── crops.js      # definições de cultivos
     ├── inventory.js  # hotbar + bag
-    ├── ui.js         # HUD, diálogo, loja, inventário, sleep
+    ├── ui.js         # HUD, diálogo, inventário, title
     ├── audio.js      # SFX WebAudio
     ├── input.js      # teclado
     └── save.js       # localStorage
 ```
 
-Para balancear o jogo (tamanho do mundo, duração do dia, energia inicial, dinheiro inicial, etc.) edite **`src/config.js`** — é o ponto único de tuning.
+Para mudar tamanho do mundo, duração do dia, energia inicial, dinheiro inicial, etc., edite **`src/config.js`** — é o ponto único de tuning.
 
-## Limitações conhecidas
+## Histórico
 
-Esse é um demo de uma sessão de algumas horas — **muito** menor que o Stardew Valley original (~5 anos de dev). Faltam: combate, mina, pesca, casamento, festivais, animais, interior da casa, multiplayer, balanceamento, e arte feita à mão. Mas o loop básico de fazenda funciona.
+Esse repo nasceu como um mini-Stardew (PR #1). Depois passou por um cleanup (PR #3 — `config.js`, fix de path bloqueado por árvore, scripts npm). Agora está sendo gutado para virar engine-only (este PR) e seguir para o noir RPG nos PRs seguintes.
 
 ## Licença
 

@@ -1,42 +1,32 @@
 // Game orchestrator: state, update, render.
+//
+// Engine-level scaffold post-farming gut: keeps the loop, camera, day/night
+// cycle, save/load, HUD, dialog, inventory, and a placeholder "use" action
+// for chopping trees / breaking rocks. All farming, shop, sleep, and seasonal
+// systems were removed; they will be replaced by noir RPG mechanics.
 
 import { Input } from './input.js';
 import { Audio } from './audio.js';
-import { TILE, SPR, drawCrop } from './sprites.js';
-import { createWorld, tileAt, setTile, T, objectAt, isPassable, endOfDay } from './world.js';
-import { CROPS, getCrop } from './crops.js';
-import { ITEMS } from './items.js';
-import { createPlayer, updatePlayer, tileInFront, describeTargetAction, playerTile } from './player.js';
-import { createInventory, addItem, selectedDef, selectedItem, removeFromSlot } from './inventory.js';
+import { TILE, SPR } from './sprites.js';
+import { createWorld, tileAt, T, endOfDay } from './world.js';
+import { createPlayer, updatePlayer, describeTargetAction } from './player.js';
+import { createInventory, addItem, selectedDef, selectedItem } from './inventory.js';
 import * as UI from './ui.js';
-import { saveGame, loadGame, hasSave, clearSave } from './save.js';
+import { saveGame, loadGame } from './save.js';
 import {
   CANVAS_W, CANVAS_H,
   REAL_SECONDS_PER_GAME_MIN,
-  DAY_START_HOUR, DAY_FAINT_HOUR, SEASON_LENGTH_DAYS, SEASONS,
+  DAY_START_HOUR, DAY_FAINT_HOUR,
   STARTING_MONEY, ENERGY_MAX, FAINT_ENERGY_RATIO,
 } from './config.js';
 
 // ---------------- Constants ----------------
 
-const VIEW_W_TILES = CANVAS_W / TILE; // 30
-const VIEW_H_TILES = CANVAS_H / TILE; // 20
-
 const ACTION_LABELS = {
-  till: 'Arar',
-  untill: 'Desfazer',
-  plant: 'Plantar',
-  fill: 'Encher',
-  water: 'Regar',
   chop: 'Cortar',
   chopStump: 'Cortar toco',
   rock: 'Quebrar',
-  cut: 'Ceifar',
-  harvest: 'Colher',
-  shop: 'Loja',
   enter: 'Entrar',
-  sleep: 'Dormir',
-  chest: 'Baú',
   talk: 'Falar',
 };
 
@@ -45,15 +35,6 @@ const ACTION_LABELS = {
 export function createInitialState() {
   const world = createWorld();
   const inv = createInventory();
-  // Starter loadout: tools in slots 0-4, parsnip seeds in 5
-  inv.slots[0] = { id: 'hoe',      qty: 1 };
-  inv.slots[1] = { id: 'watering', qty: 1, water: 0 };
-  inv.slots[2] = { id: 'axe',      qty: 1 };
-  inv.slots[3] = { id: 'pickaxe',  qty: 1 };
-  inv.slots[4] = { id: 'scythe',   qty: 1 };
-  addItem(inv, 'parsnip_seed', 8);
-  inv.selected = 0;
-
   return {
     world,
     inventory: inv,
@@ -62,11 +43,8 @@ export function createInitialState() {
     energy: ENERGY_MAX,
     energyMax: ENERGY_MAX,
     day: 1,
-    season: SEASONS[0],
-    year: 1,
     hour: DAY_START_HOUR,
     minute: 0,
-    weather: 'sun',
     timeAccum: 0,
     paused: false,
     fainted: false,
@@ -78,14 +56,9 @@ export function createInitialState() {
 export function loadStateFromSave() {
   const data = loadGame();
   if (!data) return null;
-  const world = createWorld(); // base
-  // Replace tiles + objects with saved
-  if (data.tiles) {
-    world.tiles = new Uint8Array(data.tiles);
-  }
-  if (Array.isArray(data.objects)) {
-    world.objects = data.objects;
-  }
+  const world = createWorld();
+  if (data.tiles) world.tiles = new Uint8Array(data.tiles);
+  if (Array.isArray(data.objects)) world.objects = data.objects;
   return {
     world,
     inventory: data.inventory,
@@ -94,11 +67,8 @@ export function loadStateFromSave() {
     energy: data.energy,
     energyMax: data.energyMax,
     day: data.day,
-    season: data.season,
-    year: data.year,
     hour: data.hour,
     minute: data.minute,
-    weather: data.weather,
     timeAccum: 0,
     paused: false,
     fainted: false,
@@ -164,14 +134,13 @@ export class Game {
       s.timeAccum -= whole * REAL_SECONDS_PER_GAME_MIN;
       s.minute += whole;
       while (s.minute >= 60) { s.minute -= 60; s.hour += 1; }
-      // pass out at DAY_FAINT_HOUR (default 02:00) if not slept
+      // Auto-recover at the late-night cutoff (placeholder until the noir
+      // sleep / safe-house mechanic replaces this).
       if (s.hour >= DAY_FAINT_HOUR && !s.fainted) {
         s.fainted = true;
-        s.energy = Math.max(0, s.energy * 0.5);
         Audio.faint();
-        UI.toast('Você desmaiou! Acordou no dia seguinte.');
-        // simulate sleep transition
-        setTimeout(() => this.sleep(true), 600);
+        UI.toast('Você apagou. Acordou no dia seguinte.');
+        setTimeout(() => this.recoverDay(true), 600);
       }
     }
   }
@@ -180,50 +149,37 @@ export class Game {
     this.state.energy -= n;
     if (this.state.energy <= 0) {
       this.state.energy = 0;
-      // Force faint
       if (!this.state.fainted) {
         this.state.fainted = true;
         Audio.faint();
-        UI.toast('Sem energia! Você desmaiou.');
-        setTimeout(() => this.sleep(true), 600);
+        UI.toast('Sem energia! Você apagou.');
+        setTimeout(() => this.recoverDay(true), 600);
       }
     }
   }
 
-  // ---------- Sleep / new day ----------
+  // ---------- Day reset ----------
+  // Placeholder for "rest/sleep". Triggered automatically on faint or when
+  // running out of energy. Will be replaced by a dedicated safe-house /
+  // narrative beat in the noir RPG.
 
-  sleep(forced = false) {
+  recoverDay(forced = false) {
     const s = this.state;
     s.fainted = false;
-    // End-of-day world tick
     endOfDay(s.world);
-    // Update crop readiness based on daysGrown
-    for (const o of s.world.objects) {
-      if (o.removed || o.type !== 'crop') continue;
-      const def = getCrop(o.cropId);
-      if ((o.daysGrown || 0) >= (def.stages - 1) * def.daysPerStage) {
-        o.ready = true;
-      }
-    }
     s.day += 1;
-    if (s.day > SEASON_LENGTH_DAYS) {
-      s.day = 1;
-      const idx = SEASONS.indexOf(s.season);
-      s.season = SEASONS[(idx + 1) % SEASONS.length];
-      if (s.season === SEASONS[0]) s.year += 1;
-    }
     s.hour = DAY_START_HOUR;
     s.minute = 0;
     s.energy = forced ? Math.round(s.energyMax * FAINT_ENERGY_RATIO) : s.energyMax;
     s.flash = 1.0;
     Audio.newDay();
-    // Move player back to the home spawn (path tile just south of the door)
+    // Send the player back to spawn after a faint.
     const p = s.player;
     p.x = s.world.spawn.x * TILE + 4;
     p.y = s.world.spawn.y * TILE;
     p.dir = 'down';
     saveGame(s);
-    UI.toast(`${seasonName(s.season)} ${s.day}, ano ${s.year}`);
+    UI.toast(`Dia ${s.day}`);
   }
 
   // ---------- Update ----------
@@ -232,32 +188,21 @@ export class Game {
     const s = this.state;
     if (UI.isTitleOpen()) return;
 
-    // Toggle inventory
     if (Input.consumePress('inventory')) {
       if (UI.isInventoryOpen()) UI.hideInventory();
       else if (!UI.isAnyOverlayOpen()) UI.showInventory(s);
     }
 
-    // ESC closes overlays
     if (Input.consumePress('escape')) {
-      if (UI.isShopOpen()) UI.hideShop();
-      else if (UI.isInventoryOpen()) UI.hideInventory();
-      else if (UI.isSleepOpen()) UI.hideSleepMenu();
+      if (UI.isInventoryOpen()) UI.hideInventory();
       else if (UI.isDialogOpen()) UI.hideDialog();
     }
 
-    // Action / interact
     if (Input.consumePress('action')) {
       if (UI.isDialogOpen()) UI.hideDialog();
-      else if (UI.isSleepOpen()) {
-        UI.hideSleepMenu();
-        this.sleep(false);
-      } else if (!UI.isAnyOverlayOpen()) {
-        this.useTool();
-      }
+      else if (!UI.isAnyOverlayOpen()) this.useTool();
     }
 
-    // Hotbar selection
     const hb = Input.takeHotbarPress();
     if (hb >= 0 && !UI.isAnyOverlayOpen()) {
       s.inventory.selected = hb;
@@ -277,7 +222,7 @@ export class Game {
     if (s.flash > 0) s.flash -= dt * 2;
   }
 
-  // ---------- Tool use ----------
+  // ---------- Action / interact ----------
 
   useTool() {
     const s = this.state;
@@ -287,71 +232,23 @@ export class Game {
     s.player.actionAnimT = 0.18;
 
     switch (target.kind) {
-      case 'till':
-        setTile(s.world, target.tx, target.ty, T.TILLED);
-        Audio.till();
-        this.spendEnergy(2);
-        break;
-      case 'untill':
-        setTile(s.world, target.tx, target.ty, T.GRASS);
-        Audio.till();
-        this.spendEnergy(1);
-        break;
-      case 'fill':
-        if (item && def.tool === 'watering') {
-          item.water = def.waterMax;
-          Audio.water();
-          UI.toast('Regador cheio');
-        }
-        break;
-      case 'water':
-        if (item && item.water > 0) {
-          setTile(s.world, target.tx, target.ty, T.WATERED);
-          item.water -= 1;
-          // also water any planted crop on this tile
-          const obj = objectAt(s.world, target.tx, target.ty);
-          if (obj && obj.type === 'crop') obj.watered = true;
-          Audio.water();
-          this.spendEnergy(2);
-        }
-        break;
-      case 'plant': {
-        // selectedItem is a seed; def.plants is the crop id
-        const cropId = def.plants;
-        // season check
-        const seasonOK = !def.season || def.season.includes(s.season);
-        if (!seasonOK) { Audio.cantDo(); UI.toast('Fora de estação'); break; }
-        s.world.objects.push({
-          type: 'crop',
-          cropId,
-          x: target.tx, y: target.ty,
-          daysGrown: 0,
-          watered: tileAt(s.world, target.tx, target.ty) === T.WATERED,
-          ready: false,
-        });
-        removeFromSlot(s.inventory, s.inventory.selected, 1);
-        Audio.plant();
-        break;
-      }
       case 'chop': {
         const o = target.obj;
         o.hp = (o.hp || 3) - 1;
         Audio.chop();
-        this.spendEnergy(4);
+        this.spendEnergy(2);
         if (o.hp <= 0) {
           o.removed = true;
-          // drop wood
-          const overflow = addItem(s.inventory, 'wood', 4);
+          addItem(s.inventory, 'wood', 4);
           UI.toast('+4 Madeira');
         }
         break;
       }
       case 'chopStump': {
-        const o = target.obj;
-        o.removed = true;
-        addItem(s.inventory, 'wood', 1);
+        target.obj.removed = true;
         Audio.chop();
-        this.spendEnergy(3);
+        this.spendEnergy(1);
+        addItem(s.inventory, 'wood', 1);
         UI.toast('+1 Madeira');
         break;
       }
@@ -359,7 +256,7 @@ export class Game {
         const o = target.obj;
         o.hp = (o.hp || 2) - 1;
         Audio.rock();
-        this.spendEnergy(4);
+        this.spendEnergy(2);
         if (o.hp <= 0) {
           o.removed = true;
           addItem(s.inventory, 'stone', 2);
@@ -367,62 +264,15 @@ export class Game {
         }
         break;
       }
-      case 'cut': {
-        const o = target.obj;
-        o.removed = true;
-        Audio.cut();
-        this.spendEnergy(1);
-        if (o.type === 'weed') {
-          addItem(s.inventory, 'fiber', 1);
-          UI.toast('+1 Fibra');
-        } else {
-          addItem(s.inventory, 'hay', 1);
-          UI.toast('+1 Feno');
-        }
-        break;
-      }
-      case 'harvest': {
-        const o = target.obj;
-        const def = getCrop(o.cropId);
-        addItem(s.inventory, def.item, 1);
-        Audio.pickup();
-        UI.toast(`+1 ${ITEMS[def.item].name}`);
-        if (def.regrow) {
-          // Regrowing crops: reset to (stages-2) so they ripen again in `regrow` days
-          o.daysGrown = (def.stages - 1) * def.daysPerStage - def.regrow * def.daysPerStage;
-          if (o.daysGrown < 0) o.daysGrown = 0;
-          o.ready = false;
-          o.watered = false;
-        } else {
-          o.removed = true;
-          // Soil reverts to plain tilled
-          if (tileAt(s.world, target.tx, target.ty) === T.WATERED) {
-            setTile(s.world, target.tx, target.ty, T.TILLED);
-          }
-        }
-        break;
-      }
-      case 'shop':
-        UI.showShop(s, (id, qty) => addItem(s.inventory, id, qty));
-        break;
-      case 'sleep':
-        UI.showSleepMenu(() => this.sleep(false));
-        break;
       case 'enter':
-        UI.toast('A casa está trancada... volte na próxima atualização!');
-        break;
-      case 'chest':
-        UI.toast('Baú vazio (em breve!)');
+        UI.toast('Porta trancada (em breve!)');
         break;
       case 'talk':
-        if (target.obj.name === 'Pierre') {
-          UI.showDialog('Pierre', 'Bem-vindo à Loja Geral! Vendemos sementes para você plantar. Aperte espaço na porta da loja para abrir o catálogo.');
-        }
+        UI.showDialog(target.obj.name || 'Estranho', '...');
         break;
       default:
-        if (def && def.tool) {
-          Audio.cantDo();
-        }
+        // No-op: nothing actionable in front of the player.
+        break;
     }
   }
 
@@ -450,13 +300,11 @@ export class Game {
     this.computeCamera();
     const cx = this._cameraX, cy = this._cameraY;
 
-    // Visible tile range
     const x0 = Math.max(0, Math.floor(cx / TILE));
     const y0 = Math.max(0, Math.floor(cy / TILE));
     const x1 = Math.min(s.world.width - 1, Math.ceil((cx + CANVAS_W) / TILE));
     const y1 = Math.min(s.world.height - 1, Math.ceil((cy + CANVAS_H) / TILE));
 
-    // Pass 1: tiles
     const waterFrame = ((Math.floor(s.waterAnimT * 4) % 4) + 4) % 4;
     for (let ty = y0; ty <= y1; ty++) {
       for (let tx = x0; tx <= x1; tx++) {
@@ -464,9 +312,8 @@ export class Game {
       }
     }
 
-    // Pass 2: objects + player, sorted by Y for pseudo-depth
+    // Pass 2: objects + player, sorted by Y for pseudo-depth.
     const drawables = [];
-    // player
     drawables.push({ y: s.player.y + 32, draw: () => this.drawPlayer(cx, cy) });
     for (const o of s.world.objects) {
       if (o.removed) continue;
@@ -522,31 +369,17 @@ export class Game {
     switch (t) {
       case T.GRASS: img = SPR.grass[(tx * 7 + ty * 13) % 4]; break;
       case T.PATH: img = SPR.path; break;
-      case T.TILLED: img = SPR.tilled; break;
-      case T.WATERED: img = SPR.watered; break;
       case T.WATER: img = SPR.water[waterFrame]; break;
       case T.STONE_FLOOR: img = SPR.stoneFloor; break;
       case T.WOOD_FLOOR: img = SPR.wood; break;
-      case T.HOUSE_ROOF: img = SPR.houseRoof; break;
-      case T.SHOP_ROOF: img = SPR.shopRoof; break;
-      case T.WALL: img = SPR.wall; break;
-      case T.HOUSE_DOOR:
-      case T.SHOP_DOOR: img = SPR.door; break;
       case T.FENCE: img = SPR.fence; break;
-      case T.SHOP_SIGN: img = SPR.shopSign; break;
-      case T.BED:
-        // bed is 2 tiles wide: only draw on the leftmost cell
-        ctx.drawImage(SPR.grass[0], dx, dy);
-        ctx.drawImage(SPR.bed, dx, dy);
-        return;
-      case T.CHEST:
-        ctx.drawImage(SPR.grass[0], dx, dy);
-        ctx.drawImage(SPR.chest, dx, dy);
-        return;
+      case T.WALL: img = SPR.wall; break;
+      case T.BUILDING_ROOF: img = SPR.buildingRoof; break;
+      case T.BUILDING_DOOR: img = SPR.door; break;
       default: img = SPR.grass[0];
     }
     if (!img) img = SPR.grass[0];
-    if (img) ctx.drawImage(img, dx, dy);
+    ctx.drawImage(img, dx, dy);
   }
 
   drawObject(o, cx, cy) {
@@ -559,17 +392,8 @@ export class Game {
       ctx.drawImage(SPR.stump, dx, dy);
     } else if (o.type === 'rock') {
       ctx.drawImage(SPR.rock, dx, dy);
-    } else if (o.type === 'weed') {
-      ctx.drawImage(SPR.weed, dx, dy);
-    } else if (o.type === 'grassTuft') {
-      ctx.drawImage(SPR.grassTuft, dx, dy);
-    } else if (o.type === 'crop') {
-      const def = getCrop(o.cropId);
-      const stage = Math.min(def.stages - 1, Math.floor((o.daysGrown || 0) / def.daysPerStage));
-      drawCrop(ctx, dx, dy, def, stage, o.watered);
     } else if (o.type === 'npc') {
-      ctx.drawImage(SPR.shopkeeper, dx + 4, dy);
-      // name tag
+      ctx.drawImage(SPR.npc, dx + 4, dy);
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
       const w = ctx.measureText(o.name).width + 8;
       ctx.fillRect(dx + 16 - w / 2, dy - 14, w, 12);
@@ -586,7 +410,6 @@ export class Game {
     const p = s.player;
     const dx = Math.floor(p.x - cx);
     const dy = Math.floor(p.y - cy);
-    // Soft shadow under the player for visibility/depth
     this.ctx.save();
     this.ctx.fillStyle = 'rgba(0,0,0,0.32)';
     this.ctx.beginPath();
@@ -597,27 +420,24 @@ export class Game {
     const fi = p.moving ? p.animFrame : 0;
     this.ctx.drawImage(frames[fi], dx, dy);
 
-    // Tool swing arc
+    // Tool swing arc — kept as a generic "did something" feedback hook.
     if (p.actionAnimT > 0) {
-      const def = selectedDef(s.inventory);
-      if (def && def.tool) {
-        const t = 1 - (p.actionAnimT / 0.18);
-        const arc = Math.sin(t * Math.PI);
-        this.ctx.fillStyle = '#ffd34d';
-        let ax = dx + 12, ay = dy + 16;
-        if (p.dir === 'up') ay -= 14 * arc;
-        else if (p.dir === 'down') ay += 14 * arc;
-        else if (p.dir === 'left') ax -= 14 * arc;
-        else if (p.dir === 'right') ax += 14 * arc;
-        this.ctx.fillRect(ax - 2, ay - 2, 4, 4);
-      }
+      const t = 1 - (p.actionAnimT / 0.18);
+      const arc = Math.sin(t * Math.PI);
+      this.ctx.fillStyle = '#ffd34d';
+      let ax = dx + 12, ay = dy + 16;
+      if (p.dir === 'up') ay -= 14 * arc;
+      else if (p.dir === 'down') ay += 14 * arc;
+      else if (p.dir === 'left') ax -= 14 * arc;
+      else if (p.dir === 'right') ax += 14 * arc;
+      this.ctx.fillRect(ax - 2, ay - 2, 4, 4);
     }
   }
 
   drawLighting() {
     const s = this.state;
     const ctx = this.ctx;
-    // 0 (full day) at 8:00, 1 (full night) at 22:00; partial in between
+    // 0 (full day) at 8:00, 1 (full night) at 22:00; partial in between.
     const totalMin = s.hour * 60 + s.minute;
     const sunrise = 6 * 60, dayBright = 8 * 60, dusk = 19 * 60, fullDark = 22 * 60;
     let darkness;
@@ -628,7 +448,6 @@ export class Game {
     else darkness = 0.55 + Math.min(0.15, (totalMin - fullDark) / (60 * 4) * 0.15);
 
     if (darkness > 0.001) {
-      // bluish night
       ctx.fillStyle = `rgba(20, 30, 80, ${darkness})`;
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     }
@@ -636,4 +455,3 @@ export class Game {
 }
 
 function lerp(a, b, t) { return a + (b - a) * Math.max(0, Math.min(1, t)); }
-function seasonName(s) { return ({ spring: 'Primavera', summer: 'Verão', fall: 'Outono', winter: 'Inverno' })[s]; }
