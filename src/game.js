@@ -263,7 +263,7 @@ export class Game {
       if (action.startsWith('collect:')) {
         // Evidence collection: "collect:evidence_id"
         const evidenceId = action.slice(8);
-        collectEvidence(s, evidenceId);
+        if (collectEvidence(s, evidenceId)) saveGame(s);
         return;
       }
       if (action === 'talk' || action.startsWith('talk:')) {
