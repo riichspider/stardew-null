@@ -111,13 +111,13 @@ export class Cutscene {
     this.done = true;
     // Quick fade to black on skip; natural completion already faded.
     if (this.skipped) {
-      // A short fade-out frame loop before stopping. Simplest approach:
-      // schedule the stop a couple frames later.
+      // A short fade-out frame loop before stopping.
       const ctx = this.ctx;
       let t = 0;
-      const lastT = performance.now();
+      let lastT = performance.now();
       const fadeLoop = (now) => {
-        const dt = Math.min(0.05, Math.max(0, (now - lastT - t * 1000) / 1000));
+        const dt = Math.min(0.05, (now - lastT) / 1000);
+        lastT = now;
         t += dt;
         const a = Math.min(1, t / 0.35);
         // Don't redraw shot — just darken what's there

@@ -149,6 +149,12 @@ export function tryCombineEvidence(state, slotIdxA, slotIdxB) {
   if (defA.combinableWith) {
     const combo = defA.combinableWith.find(c => c.id === slotB.id);
     if (combo) {
+      // Check for empty slot BEFORE removing items
+      const hasSpace = state.inventory.slots.some(s => !s);
+      if (!hasSpace) {
+        toast('Sem espaço no inventário!');
+        return { success: false, result: null };
+      }
       removeFromSlot(state.inventory, slotIdxA, 1);
       removeFromSlot(state.inventory, slotIdxB, 1);
       addItem(state.inventory, combo.result, 1);
@@ -162,6 +168,12 @@ export function tryCombineEvidence(state, slotIdxA, slotIdxB) {
   if (defB.combinableWith) {
     const combo = defB.combinableWith.find(c => c.id === slotA.id);
     if (combo) {
+      // Check for empty slot BEFORE removing items
+      const hasSpace = state.inventory.slots.some(s => !s);
+      if (!hasSpace) {
+        toast('Sem espaço no inventário!');
+        return { success: false, result: null };
+      }
       removeFromSlot(state.inventory, slotIdxA, 1);
       removeFromSlot(state.inventory, slotIdxB, 1);
       addItem(state.inventory, combo.result, 1);

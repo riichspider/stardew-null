@@ -292,7 +292,9 @@ export class Game {
         return;
       }
       if (action === 'talk' || action.startsWith('talk:')) {
-        setFlag('last_npc_talked', hotspot.label || hotspot.id || null);
+        // Set flag only if there's an actual NPC to record
+        const npcName = hotspot.label || hotspot.id;
+        if (npcName) setFlag('last_npc_talked', npcName);
         const dialogId = action.startsWith('talk:') ? action.slice(5) : null;
         if (dialogId) {
           const tree = startDialog(dialogId, s);
