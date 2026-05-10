@@ -67,7 +67,11 @@ function _readFlags() {
     const raw = localStorage.getItem(FLAGS_KEY);
     if (!raw) return {};
     const obj = JSON.parse(raw);
-    return (obj && typeof obj === 'object') ? obj : {};
+    // Reject non-plain-objects (arrays, primitives, null) so a malformed
+    // value can't make `setFlag()` mutate-and-rewrite something that
+    // `getFlag()` would then misread.
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+    return obj;
   } catch (e) {
     return {};
   }

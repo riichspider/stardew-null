@@ -8,6 +8,21 @@ let muted = false;
 // loops don't get garbage-collected mid-cutscene.
 const _voices = new Map();
 
+// Deterministic PRNG used to fill noise buffers. Same pattern used in
+// sprites.js / lighting.js / cutscene-shots.js. Seeded once per voice fill
+// so that re-renders of the cutscene hear an identical noise bed instead of
+// drifting on every reload.
+function _mulberry32(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function ensureCtx() {
   if (!ctx) {
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -45,7 +60,10 @@ function noise({ dur = 0.12, vol = 0.12, freq = 800, q = 5 }) {
   const len = Math.floor(sr * dur);
   const buf = c.createBuffer(1, len, sr);
   const data = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1);
+  // Deterministic white-noise fill so SFX bursts sound identical on replay.
+  // (A short freshly-seeded stream per call keeps successive calls distinct.)
+  const rnd = _mulberry32(0x9e37 ^ Math.floor(t0 * 1000) ^ len);
+  for (let i = 0; i < len; i++) data[i] = (rnd() * 2 - 1);
   const src = c.createBufferSource();
   src.buffer = buf;
   const filt = c.createBiquadFilter();
@@ -89,10 +107,13 @@ function _startNoiseVoice(name, { vol, filterFreq, filterQ, type = 'lowpass' }) 
   const len = Math.floor(sr * 2);
   const buf = c.createBuffer(1, len, sr);
   const data = buf.getChannelData(0);
-  // Pink-ish (low-passed white) for nicer rain
+  // Pink-ish (low-passed white) for nicer rain. Seeded so the loop sounds
+  // identical on every cutscene replay; loop length (2s) is plenty long
+  // for a believable rain bed.
+  const rnd = _mulberry32(name.charCodeAt(0) ^ (len & 0xffff));
   let last = 0;
   for (let i = 0; i < len; i++) {
-    const w = Math.random() * 2 - 1;
+    const w = rnd() * 2 - 1;
     last = (last + w * 0.02) * 0.96;
     data[i] = last + w * 0.18;
   }

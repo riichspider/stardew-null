@@ -78,7 +78,13 @@ export function resolveCamera(shot, t) {
       const aP = ease(fg.walk.ease || 'linear', t / dur);
       const ax = fg.walk.fromX + (fg.walk.toX - fg.walk.fromX) * aP;
       // Want the actor in the centerline of the frame
-      const desired = ax - CANVAS_W / 2;
+      let desired = ax - CANVAS_W / 2;
+      // Clamp to the layer bounds so we never expose empty margins past the
+      // edges of the painted background. Falls back to the shot's declared
+      // width or to the canvas width.
+      const maxPan = Math.max(0, (shot.width || CANVAS_W) - CANVAS_W);
+      if (desired < 0)        desired = 0;
+      else if (desired > maxPan) desired = maxPan;
       return { offsetX: desired, scale: 1.08, pivotX: CANVAS_W / 2, pivotY: CANVAS_H / 2 };
     }
     case 'static':

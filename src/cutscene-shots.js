@@ -36,6 +36,27 @@ function mkCanvas(w, h) {
   return c;
 }
 
+// Deterministic PRNG (mulberry32) — matches the pattern used in sprites.js
+// and lighting.js. The cutscene seeds a single shared stream so its
+// procedural details (window arrangement, scratches, dust, photo grain) are
+// stable across boots and reviews instead of jittering on every reload.
+function mulberry32(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Module-scoped procedural-noise PRNG — used in place of Math.random() so
+// the visual look of the opening is reproducible. A scalar seed (4242) was
+// chosen because the resulting layouts read the best by eye; bumping it
+// reshuffles the dust/scratches/window dots but leaves geometry intact.
+const _rand = mulberry32(0x4242);
+
 // ---------- Shot 1: cityPan ----------
 // Wide 1800×640 cityscape with parallax layers. Camera pans left → right.
 // Reuses the same layer generators as street01 so the visual language is
@@ -176,7 +197,7 @@ function drawWindow(g, x, y, w, h) {
     [130, 140], [140, 180],
   ];
   for (const [dx, dy] of litSpec) {
-    if (Math.random() > 0.35) {
+    if (_rand() > 0.35) {
       g.fillRect(x + dx, y + dy, 2, 2);
     }
   }
@@ -190,8 +211,8 @@ function drawWindow(g, x, y, w, h) {
   g.strokeStyle = 'rgba(180, 200, 255, 0.45)';
   g.lineWidth = 1;
   for (let i = 0; i < 60; i++) {
-    const sx = x + 4 + Math.random() * (w - 8);
-    const sy = y + 8 + Math.random() * (h - 16);
+    const sx = x + 4 + _rand() * (w - 8);
+    const sy = y + 8 + _rand() * (h - 16);
     g.beginPath();
     g.moveTo(sx, sy);
     g.lineTo(sx - 3, sy + 14);
@@ -235,9 +256,9 @@ export function buildCaseFileShot() {
   // Grain streaks
   g.fillStyle = 'rgba(180, 130, 70, 0.05)';
   for (let i = 0; i < 200; i++) {
-    const x = Math.random() * W;
-    const y = Math.random() * H;
-    g.fillRect(x, y, 30 + Math.random() * 40, 1);
+    const x = _rand() * W;
+    const y = _rand() * H;
+    g.fillRect(x, y, 30 + _rand() * 40, 1);
   }
 
   // ---- Manila folder under everything ----
@@ -344,7 +365,7 @@ function drawPaper(g, x, y, w, h) {
   g.fillStyle = '#1a1010';
   for (let i = 0; i < 9; i++) {
     const lineY = y + 50 + i * 12;
-    const lineW = (w - 40) * (0.55 + Math.random() * 0.4);
+    const lineW = (w - 40) * (0.55 + _rand() * 0.4);
     g.fillRect(x + 18, lineY, lineW, 2);
   }
   // Signature scrawl
@@ -425,7 +446,10 @@ function drawKey(g, x, y, len) {
 // on the way. Reuses the apartment composite from shot 2.
 
 export function buildPrepExitShot() {
-  const W = CANVAS_W;
+  // Wider than the canvas so the track camera (which centers on the actor)
+  // has real room to pan without exposing empty margins past the painted
+  // background. With W = CANVAS_W * 1.5 the camera can pan up to 480 px.
+  const W = Math.round(CANVAS_W * 1.5);
   const H = CANVAS_H;
   const groundY = 480;
 
@@ -437,31 +461,34 @@ export function buildPrepExitShot() {
   // Door highlight on the *left* wall — exit doorway
   drawHighlightedDoor(g, 30, groundY - 90, 42, 90);
 
+  // Walk range: actor starts at the right edge area and walks toward the
+  // door on the far left. The camera tracks them; `cutscene-director`
+  // clamps the camera offset to [0, W - CANVAS_W] so the painted layer
+  // always covers the viewport.
+  const walkFromX = W - 240;
+  const walkToX   = 240;
+
   return {
     width: W,
     height: H,
     groundY,
     layers: [{ img: composite, parallax: 1.00 }],
     fg: [
-      // Detective walking right→left toward the door, scaled 3x
       {
         kind: 'detective',
-        // Director will animate `x` along the shot timeline; this is the
-        // initial value. End position is set by the timeline's camera move
-        // OR by a per-shot `walk` config (read by director).
-        x: 720,
+        x: walkFromX,
         y: groundY - 4,
         scale: 3,
         pose: 'walk',
         facing: 'left',
-        walk: { fromX: 720, toX: 90, ease: 'linear' },
+        walk: { fromX: walkFromX, toX: walkToX, ease: 'linear' },
       },
     ],
     lights: [
-      { x: 540, y: groundY - 50, color: PALETTE.neonAmber, radius: 180, intensity: 0.85, parallax: 1.00, flicker: { rate: 2.0, seed: 0.4 } },
-      { x:  60, y: groundY - 60, color: PALETTE.neonCyan,  radius: 110, intensity: 0.45, parallax: 1.00 },
+      { x: Math.round(W * 0.55), y: groundY - 50, color: PALETTE.neonAmber, radius: 180, intensity: 0.85, parallax: 1.00, flicker: { rate: 2.0, seed: 0.4 } },
+      { x: 60,                   y: groundY - 60, color: PALETTE.neonCyan,  radius: 110, intensity: 0.45, parallax: 1.00 },
       // Highlighted door has a brighter pool to draw the eye
-      { x:  50, y: groundY - 50, color: '#ffe7b0', radius: 140, intensity: 0.55, parallax: 1.00, flicker: { rate: 0.6, seed: 0.2 } },
+      { x: 50,                   y: groundY - 50, color: '#ffe7b0', radius: 140, intensity: 0.55, parallax: 1.00, flicker: { rate: 0.6, seed: 0.2 } },
     ],
     ambient: {
       fog:  { tint: 'rgba(60, 40, 30, 0.32)', alpha: 0.22 },
