@@ -8,6 +8,8 @@ import { hasSave, getFlag, setFlag } from './save.js';
 import * as UI from './ui.js';
 import { Cutscene } from './cutscene.js';
 import { buildOpeningTimeline } from './cutscene-timeline.js';
+// Load evidence definitions (registers items into ITEMS)
+import './evidence.js';
 
 const canvas = document.getElementById('game');
 canvas.focus();

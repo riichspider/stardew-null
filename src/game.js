@@ -13,6 +13,7 @@ import { createInventory } from './inventory.js';
 import * as UI from './ui.js';
 import { saveGame, loadGame } from './save.js';
 import { applyLighting } from './lighting.js';
+import { collectEvidence, EVIDENCE } from './evidence.js';
 import {
   CANVAS_W, CANVAS_H,
   REAL_SECONDS_PER_GAME_MIN,
@@ -175,6 +176,14 @@ export class Game {
       else if (!UI.isAnyOverlayOpen()) UI.showInventory(s);
     }
 
+    if (UI.isInventoryOpen() && Input.consumePress('action')) {
+      // In combine mode: attempt combine with selected slot
+      const cm = UI.getCombineMode && UI.getCombineMode();
+      if (cm && cm.slotA !== undefined) {
+        UI.attemptCombine(s);
+      }
+    }
+
     if (Input.consumePress('escape')) {
       if (UI.isInventoryOpen()) UI.hideInventory();
       else if (UI.isDialogOpen()) UI.hideDialog();
@@ -249,6 +258,12 @@ export class Game {
       }
       if (action.startsWith('examine:')) {
         UI.toast(`${hotspot.label || 'Examinar'} — em breve.`);
+        return;
+      }
+      if (action.startsWith('collect:')) {
+        // Evidence collection: "collect:evidence_id"
+        const evidenceId = action.slice(8);
+        collectEvidence(s, evidenceId);
         return;
       }
       if (action === 'talk' || action.startsWith('talk:')) {

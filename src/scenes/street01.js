@@ -136,6 +136,22 @@ export const street01 = {
       label: 'Entrar no bar',
       action: 'enter:bar',
     },
+    // Test evidence: photo on ground
+    {
+      id: 'evidence_photo',
+      x: 400,
+      w: 40,
+      label: 'Pegar foto',
+      action: 'collect:evidence_photo_scene',
+    },
+    // Test evidence: blood stain
+    {
+      id: 'evidence_blood',
+      x: 1200,
+      w: 40,
+      label: 'Analisar mancha',
+      action: 'collect:evidence_bloody_handprint',
+    },
   ],
   npcs: [
     // Empty for now; NPCs come with the dialog-tree PR.
