@@ -57,11 +57,10 @@ function playCutsceneThen(onComplete) {
 
 function startNew() {
   Audio.init();
-  if (getFlag('cutsceneSeen', false)) {
-    UI.hideTitle();
-    startGameplay(createInitialState());
-    return;
-  }
+  // "Começar [Espaço]" always plays the opening cutscene. It's skippable at
+  // any time via Space/Enter/Esc, so even returning players get the option.
+  // The `cutsceneSeen` flag is still set the first time, so the
+  // "Rever abertura" button on the title stays available.
   playCutsceneThen(() => startGameplay(createInitialState()));
 }
 
