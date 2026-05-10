@@ -222,7 +222,7 @@ export class Cutscene {
     if (!shot || !shot._bg) return;
 
     // Pull the build product out: the shot package (layers, fg, lights, etc.)
-    drawShot(ctx, { ...shot._bg, dur: shot.dur, camera: shot.camera, shake: shot.shake, id: shot.id }, this.shotT);
+    drawShot(ctx, { ...shot._bg, dur: shot.dur, camera: shot.camera, shake: shot.shake, id: shot.id }, this.shotT, dt);
 
     // Active subtitle (one at a time)
     let activeSub = null;
