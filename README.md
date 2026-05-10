@@ -29,7 +29,7 @@ Originalmente um clone mini de Stardew Valley (PR #1). Depois cleanup técnico (
 - **PR #6** — lighting cinemático noir: chuva animada, neon piscando, point lights nos postes, fog volumétrico
 - **PR #7** — sistema de cenas com transições (fade in/out entre `street01` → `apartment` → `bar`)
 - **PR #8** — árvore de diálogo com escolhas que setam flags de mundo
-- **PR #9** — pistas/evidências/case file
+- **PR #9** — expansão do case file (novas pistas e combinações avançadas de evidências)
 - **PR #10** — gadgets (lanterna UV, scanner, gravador, taser) + ação de investigar
 - **PR #11** — combate em tempo real (mira + uso de gadgets)
 
