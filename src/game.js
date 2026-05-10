@@ -11,7 +11,7 @@ import { getScene } from './scenes.js';
 import { createPlayer, updatePlayer, hotspotInFront } from './player.js';
 import { createInventory, addItem } from './inventory.js';
 import * as UI from './ui.js';
-import { saveGame, loadGame } from './save.js';
+import { saveGame, loadGame, setFlag } from './save.js';
 import { applyLighting } from './lighting.js';
 import { collectEvidence, EVIDENCE } from './evidence.js';
 import { getDialog, startDialog, getAvailableChoices, selectChoice } from './dialogs.js';
@@ -292,7 +292,7 @@ export class Game {
         return;
       }
       if (action === 'talk' || action.startsWith('talk:')) {
-        // Dialog tree from NPC
+        setFlag('last_npc_talked', hotspot.label || hotspot.id || null);
         const dialogId = action.startsWith('talk:') ? action.slice(5) : null;
         if (dialogId) {
           const tree = startDialog(dialogId, s);

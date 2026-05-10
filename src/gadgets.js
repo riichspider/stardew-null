@@ -112,7 +112,6 @@ function useLanternUV(state, def) {
 }
 
 function useRecorder(state, def) {
-  // Records current conversation if talking to NPC
   const recording = getFlag('last_npc_talked');
   if (recording) {
     setFlag('recorded_' + recording, true);
