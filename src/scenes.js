@@ -35,7 +35,10 @@ const REGISTRY = {
 };
 
 export function getScene(id) {
-  if (!Object.hasOwn(REGISTRY, id)) throw new Error(`Unknown scene: ${id}`);
+  if (!id || !Object.hasOwn(REGISTRY, id)) {
+    console.warn('Scene not found:', id);
+    return null;
+  }
   return REGISTRY[id];
 }
 

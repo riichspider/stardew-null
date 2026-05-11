@@ -206,7 +206,21 @@ export class Game {
       if (UI.isDialogOpen()) UI.advanceOrCloseDialog();
       else if (!UI.isAnyOverlayOpen()) {
         // First check for hotspot/NPC interaction
-        const scene = getScene(s.sceneId);
+        // Defensive: ensure scene exists and player is valid
+        if (!s.sceneId || !s.player) {
+          console.error('Invalid state', { sceneId: s.sceneId, player: s.player });
+          return;
+        }
+        
+        let scene;
+        try {
+          scene = getScene(s.sceneId);
+        } catch (e) {
+          console.error('getScene failed', e);
+          return;
+        }
+        if (!scene) return;
+        
         const target = hotspotInFront(s.player, scene);
         if (target) {
           // Has interaction - useTool handles it
@@ -257,7 +271,21 @@ export class Game {
 
   useTool() {
     const s = this.state;
-    const scene = getScene(s.sceneId);
+    // Defensive: ensure valid state
+    if (!s.sceneId || !s.player) {
+      console.error('useTool: invalid state');
+      return;
+    }
+    
+    let scene;
+    try {
+      scene = getScene(s.sceneId);
+    } catch (e) {
+      console.error('useTool: getScene failed', e);
+      return;
+    }
+    if (!scene) return;
+    
     const hotspot = hotspotInFront(s.player, scene);
     s.player.actionAnimT = 0.18;
     if (!hotspot) {
