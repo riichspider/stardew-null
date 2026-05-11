@@ -7,6 +7,7 @@
 
 import { ITEMS } from './items.js';
 import { addItem, removeFromSlot, totalQty } from './inventory.js';
+import { collectEvidence } from './evidence.js';
 import { toast } from './ui.js';
 import { setFlag, getFlag } from './save.js';
 
@@ -96,10 +97,13 @@ function useLanternUV(state, def) {
       // Find blood hotspot is nearby
       const playerX = state.player.x;
       if (playerX >= 1150 && playerX <= 1250) {
-        addItem(state.inventory, 'evidence_bloody_handprint', 1);
-        toast('🔦 UV revelou algo! Rastro de sangue!');
-        setFlag('uv_revealed_blood', true);
-        return true;
+        // Use collectEvidence to prevent duplicates and handle correctly
+        if (collectEvidence(state, 'evidence_bloody_handprint')) {
+          toast('🔦 UV revelou algo! Rastro de sangue!');
+          setFlag('uv_revealed_blood', true);
+          return true;
+        }
+        return false;
       }
     }
     

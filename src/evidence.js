@@ -84,7 +84,14 @@ export function collectEvidence(state, evidenceId) {
     return false;
   }
   
-  // Already have it?
+  // Already collected this specific evidence? (more robust check)
+  const collectedFlag = `collected_${evidenceId}`;
+  if (getFlag(collectedFlag, false)) {
+    toast(`Você já tem: ${def.name}`);
+    return false;
+  }
+  
+  // Already have it in inventory?
   if (totalQty(state.inventory, evidenceId) > 0) {
     toast(`Você já tem: ${def.name}`);
     return false;
@@ -97,6 +104,9 @@ export function collectEvidence(state, evidenceId) {
   }
   
   toast(`➕ ${def.name}`);
+  
+  // Mark as collected to prevent duplicate pickup
+  setFlag(collectedFlag, true);
   
   // Unlock dialogs
   if (def.revealsDialogs) {
