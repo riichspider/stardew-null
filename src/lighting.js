@@ -36,26 +36,32 @@ function mulberry32(seed) {
 // pushing/popping per frame.
 const _rainPools = new Map();
 
-function getRainPool(sceneId, density, speed, length, rng) {
-  const key = `${sceneId}:${density}:${speed}:${length}`;
+function getRainPool(sceneId, density, speed, length, seed) {
+  const key = `${sceneId}:${density}:${speed}:${length}:${seed}`;
   if (_rainPools.has(key)) return _rainPools.get(key);
 
-  // density 0..1 → 40..220 drops. The viewport is 960×640 so this density
-  // is comfortable without choking the canvas.
+  const rng = mulberry32(seed);
   const count = Math.floor(40 + density * 180);
   const pool = new Array(count);
   for (let i = 0; i < count; i++) {
     pool[i] = {
       x: rng() * CANVAS_W,
       y: rng() * CANVAS_H,
-      vx: speed * 0.25,        // slight horizontal drift (looks like wind)
+      vx: speed * 0.25,
       vy: speed * (0.85 + rng() * 0.3),
       len: length * (0.7 + rng() * 0.6),
       splash: 0,
+      splashX: 0,
     };
   }
-  _rainPools.set(key, pool);
-  return pool;
+  const entry = { pool, rng };
+  _rainPools.set(key, entry);
+  return entry;
+}
+
+// Clear rain pools when scene changes to avoid stale particle positions
+export function clearRainPools() {
+  _rainPools.clear();
 }
 
 function drawRain(ctx, scene, dt) {
@@ -67,8 +73,8 @@ function drawRain(ctx, scene, dt) {
   const color   = r.color || 'rgba(180, 200, 255, 0.35)';
   const groundY = scene.groundY;
 
-  const rng = mulberry32((scene.seed || 0) + 0xBEEF);
-  const pool = getRainPool(scene.id, density, speed, length, rng);
+  const seed = (scene.seed || 0) + 0xBEEF;
+  const { pool, rng } = getRainPool(scene.id, density, speed, length, seed);
 
   ctx.save();
   ctx.strokeStyle = color;
@@ -84,6 +90,7 @@ function drawRain(ctx, scene, dt) {
     d.y += d.vy * dt;
     if (d.y >= groundY) {
       d.splash = 0.18;
+      d.splashX = d.x;
       d.x = rng() * CANVAS_W;
       d.y = -10 - rng() * 60;
       continue;
@@ -102,7 +109,7 @@ function drawRain(ctx, scene, dt) {
       const a = d.splash / 0.18;
       ctx.globalAlpha = a * 0.6;
       ctx.beginPath();
-      ctx.arc(d.x, groundY, 2.5 * (1 - a) + 0.5, 0, Math.PI * 2);
+      ctx.arc(d.splashX, groundY, 2.5 * (1 - a) + 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
   }

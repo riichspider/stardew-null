@@ -10,6 +10,10 @@ import { Cutscene } from './cutscene.js';
 import { buildOpeningTimeline } from './cutscene-timeline.js';
 // Load evidence definitions (registers items into ITEMS)
 import './evidence.js';
+// Load dialog system
+import './dialogs.js';
+// Load gadgets system
+import './gadgets.js';
 
 const canvas = document.getElementById('game');
 canvas.focus();
@@ -35,7 +39,10 @@ if (getFlag('cutsceneSeen', false)) replayBtn.classList.remove('hidden');
 
 function startGameplay(state) {
   game.start(state);
-  window._game = game;
+  // Expose for debugging only in development
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    window._game = game;
+  }
 }
 
 function playCutsceneThen(onComplete) {
@@ -53,8 +60,10 @@ function playCutsceneThen(onComplete) {
     onComplete();
   });
   cs.start();
-  // Expose for debugging
-  window._cutscene = cs;
+  // Expose for debugging only in development
+  if (import.meta.env?.DEV || typeof NODE_ENV === 'undefined') {
+    window._cutscene = cs;
+  }
 }
 
 function startNew() {

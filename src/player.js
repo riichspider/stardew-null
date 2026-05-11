@@ -49,9 +49,21 @@ export function updatePlayer(player, scene, dt) {
   if (player.actionAnimT > 0) player.actionAnimT -= dt;
 }
 
-// Returns the hotspot the player's center is currently overlapping, or null.
+// Returns the hotspot or NPC the player's center is currently overlapping, or null.
 export function hotspotInFront(player, scene) {
   const cx = player.x + PLAYER_W / 2;
+  const INTERACT_DIST = 50;
+  
+  // Check NPCs first (they have a larger interaction zone)
+  if (scene.npcs) {
+    for (const npc of scene.npcs) {
+      if (cx >= npc.x - INTERACT_DIST && cx <= npc.x + INTERACT_DIST) {
+        return npc;
+      }
+    }
+  }
+  
+  // Check hotspots
   for (const h of scene.hotspots) {
     if (cx >= h.x && cx <= h.x + h.w) return h;
   }

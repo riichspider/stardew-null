@@ -9,11 +9,13 @@ import { Audio } from './audio.js';
 import { SPR, PLAYER_W, PLAYER_H } from './sprites.js';
 import { getScene } from './scenes.js';
 import { createPlayer, updatePlayer, hotspotInFront } from './player.js';
-import { createInventory } from './inventory.js';
+import { createInventory, addItem } from './inventory.js';
 import * as UI from './ui.js';
-import { saveGame, loadGame } from './save.js';
-import { applyLighting } from './lighting.js';
+import { saveGame, loadGame, setFlag } from './save.js';
+import { applyLighting, clearRainPools } from './lighting.js';
 import { collectEvidence, EVIDENCE } from './evidence.js';
+import { getDialog, startDialog, getAvailableChoices, selectChoice } from './dialogs.js';
+import { useGadget, selectedIsGadget } from './gadgets.js';
 import {
   CANVAS_W, CANVAS_H,
   REAL_SECONDS_PER_GAME_MIN,
@@ -28,6 +30,13 @@ import {
 export function createInitialState(sceneId = DEFAULT_SCENE) {
   const scene = getScene(sceneId);
   const inv = createInventory();
+  
+  // Give player starting gadgets
+  addItem(inv, 'gadget_lantern', 1);
+  addItem(inv, 'gadget_recorder', 1);
+  addItem(inv, 'gadget_scanner', 1);
+  addItem(inv, 'gadget_taser', 1);
+  
   return {
     sceneId,
     inventory: inv,
@@ -194,8 +203,24 @@ export class Game {
     // hotspot opens the door / talks to the NPC / examines evidence.
     const interact = Input.consumePress('action') || Input.consumePress('up');
     if (interact) {
-      if (UI.isDialogOpen()) UI.hideDialog();
-      else if (!UI.isAnyOverlayOpen()) this.useTool();
+      if (UI.isDialogOpen()) UI.advanceOrCloseDialog();
+      else if (!UI.isAnyOverlayOpen()) {
+        // First check for hotspot/NPC interaction
+        const scene = getScene(s.sceneId);
+        const target = hotspotInFront(s.player, scene);
+        if (target) {
+          // Has interaction - useTool handles it
+          this.useTool();
+        } else {
+          // No interaction - try gadget
+          const gadget = selectedIsGadget(s);
+          if (gadget) {
+            useGadget(s, s.inventory.slots[s.inventory.selected].id);
+          } else {
+            Audio.step();
+          }
+        }
+      }
     }
 
     const hb = Input.takeHotbarPress();
@@ -267,7 +292,20 @@ export class Game {
         return;
       }
       if (action === 'talk' || action.startsWith('talk:')) {
-        UI.showDialog(hotspot.label || '???', '...');
+        // Set flag only if there's an actual NPC to record
+        const npcName = hotspot.label || hotspot.id;
+        if (npcName) setFlag('last_npc_talked', npcName);
+        const dialogId = action.startsWith('talk:') ? action.slice(5) : null;
+        if (dialogId) {
+          const tree = startDialog(dialogId, s);
+          if (tree) {
+            UI.showDialogTree(tree, s);
+          } else {
+            UI.showDialog(hotspot.label || '???', '...');
+          }
+        } else {
+          UI.showDialog(hotspot.label || '???', '...');
+        }
         return;
       }
     }
@@ -284,6 +322,8 @@ export class Game {
 
   changeScene(targetSceneId, spawn = 'default') {
     if (this._transition) return; // already transitioning
+    // Clear rain pools when changing scenes to avoid stale particles
+    clearRainPools();
     // Validate target up-front so we surface bad scene IDs immediately
     // instead of crashing mid-fade.
     getScene(targetSceneId);

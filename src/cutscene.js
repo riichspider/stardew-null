@@ -53,6 +53,7 @@ export class Cutscene {
     this.shotT = 0;
     this.totalT = 0;
     this.done = false;
+    this._completing = false;
     this.skipped = false;
 
     this._listeners = { complete: [] };
@@ -111,13 +112,13 @@ export class Cutscene {
     this.done = true;
     // Quick fade to black on skip; natural completion already faded.
     if (this.skipped) {
-      // A short fade-out frame loop before stopping. Simplest approach:
-      // schedule the stop a couple frames later.
+      // A short fade-out frame loop before stopping.
       const ctx = this.ctx;
       let t = 0;
-      const lastT = performance.now();
+      let lastT = performance.now();
       const fadeLoop = (now) => {
-        const dt = Math.min(0.05, Math.max(0, (now - lastT - t * 1000) / 1000));
+        const dt = Math.min(0.05, (now - lastT) / 1000);
+        lastT = now;
         t += dt;
         const a = Math.min(1, t / 0.35);
         // Don't redraw shot — just darken what's there
@@ -175,9 +176,12 @@ export class Cutscene {
       this.shotIndex++;
       this.shotT = 0;
       if (this.shotIndex >= this._shots.length) {
-        // Natural completion. Drive a brief fade-out before signalling
-        // complete so the caller sees a clean handoff.
+        // Prevent race condition: don't allow multiple completions
+        if (this._completing) return;
+        this._completing = true;
         this.done = true;
+        const lastShotIndex = this._shots.length - 1;
+        const lastShotDur = this._shots[lastShotIndex].dur;
         const ctx = this.ctx;
         let t = 0;
         let last = performance.now();
@@ -186,7 +190,8 @@ export class Cutscene {
           last = now;
           t += ddt;
           const a = Math.min(1, t / FADE_OUT_S);
-          // Keep drawing the last frame while fading
+          this.shotIndex = lastShotIndex;
+          this.shotT = lastShotDur;
           this._drawCurrentFrame(0);
           drawFade(ctx, a);
           if (a < 1) requestAnimationFrame(fadeLoop);
@@ -222,7 +227,7 @@ export class Cutscene {
     if (!shot || !shot._bg) return;
 
     // Pull the build product out: the shot package (layers, fg, lights, etc.)
-    drawShot(ctx, { ...shot._bg, dur: shot.dur, camera: shot.camera, shake: shot.shake, id: shot.id }, this.shotT);
+    drawShot(ctx, { ...shot._bg, dur: shot.dur, camera: shot.camera, shake: shot.shake, id: shot.id }, this.shotT, dt);
 
     // Active subtitle (one at a time)
     let activeSub = null;

@@ -126,5 +126,5 @@ export function buildOpeningTimeline() {
 
 // Convenience: total duration of the timeline (without fade-in/out tails).
 export function timelineDuration(timeline) {
-  return timeline.reduce((s, sh) => s + (sh.dur || 0), 0);
+  return timeline.reduce((s, sh) => s + (Number(sh.dur) || 0), 0);
 }

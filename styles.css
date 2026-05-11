@@ -205,6 +205,25 @@ html, body {
   justify-content: flex-end;
 }
 
+/* Dialog choices */
+#dialog .dialog-choice {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #e1c98c;
+  border: 2px solid #4d2b1a;
+  border-radius: 4px;
+  color: #1f1a14;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+#dialog .dialog-choice:hover {
+  background: #f8eccc;
+  border-color: #6a3d24;
+}
+
 /* Inventory grid (shop overlay was removed with the farming gut) */
 #inv-grid {
   display: grid;

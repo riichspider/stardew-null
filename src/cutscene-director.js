@@ -106,7 +106,7 @@ export function shakeOffset(shake, t) {
 
 // ---------- Shot rendering ----------
 
-export function drawShot(ctx, shot, t) {
+export function drawShot(ctx, shot, t, dt) {
   const cam = resolveCamera(shot, t);
   const [shakeX, shakeY] = shakeOffset(shot.shake, t);
 
@@ -140,7 +140,7 @@ export function drawShot(ctx, shot, t) {
   // Lighting (rain, point lights, fog) is rendered in *screen space* — it
   // shouldn't be scaled with the camera, otherwise raindrop spacing changes
   // when zoomed.
-  applyLighting(ctx, sceneAdapter(shot, cam.offsetX), cam.offsetX, t, 1 / 60);
+  applyLighting(ctx, sceneAdapter(shot, cam.offsetX), cam.offsetX, t, dt);
 
   // Vignette overlay (always in screen space)
   if (shot.ambient && shot.ambient.vignette) {
