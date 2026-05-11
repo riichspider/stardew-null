@@ -114,5 +114,6 @@ export function setFlag(key, value) {
 }
 
 export function clearFlags() {
+  _flagsCache = null;
   try { localStorage.removeItem(FLAGS_KEY); return true; } catch (e) { return false; }
 }
