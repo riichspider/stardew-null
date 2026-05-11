@@ -40,7 +40,7 @@ if (getFlag('cutsceneSeen', false)) replayBtn.classList.remove('hidden');
 function startGameplay(state) {
   game.start(state);
   // Expose for debugging only in development
-  if (import.meta.env?.DEV || typeof NODE_ENV === 'undefined') {
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
     window._game = game;
   }
 }
