@@ -39,7 +39,10 @@ if (getFlag('cutsceneSeen', false)) replayBtn.classList.remove('hidden');
 
 function startGameplay(state) {
   game.start(state);
-  window._game = game;
+  // Expose for debugging only in development
+  if (import.meta.env?.DEV || typeof NODE_ENV === 'undefined') {
+    window._game = game;
+  }
 }
 
 function playCutsceneThen(onComplete) {
@@ -57,8 +60,10 @@ function playCutsceneThen(onComplete) {
     onComplete();
   });
   cs.start();
-  // Expose for debugging
-  window._cutscene = cs;
+  // Expose for debugging only in development
+  if (import.meta.env?.DEV || typeof NODE_ENV === 'undefined') {
+    window._cutscene = cs;
+  }
 }
 
 function startNew() {

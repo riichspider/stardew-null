@@ -18,21 +18,21 @@ import { setFlag, getFlag } from './save.js';
 export const DIALOGS = {
   // Talking to the witness NPC on the street
   witness_initial: {
-    text: "Você é o detetive quechu? Ando te procurando...",
+    text: "Você é o detetive? Andava te procurando...",
     choices: [
       { text: " Quem é você?", next: 'witness_who' },
-      { text: " O queVocê sabe?", next: 'witness_what', requiresEvidence: 'evidence_witness_card' },
+      { text: " O que você sabe?", next: 'witness_what', requiresEvidence: 'evidence_witness_card' },
     ],
   },
   witness_who: {
-    text: "Eu vi tudo. Aquela noite. Maseles tão me procurando.",
+    text: "Eu vi tudo. Aquela noite. Mas eles estão me procurando.",
     choices: [
       { text: " Conte-me.", next: 'witness_tell' },
       { text: " Você está seguro aqui.", next: 'witness_safe' },
     ],
   },
   witness_what: {
-    text: "Você têm o meu cartão? Achei que tinha perdido. O endereço naverso vai te ajudar.",
+    text: "Você tem o meu cartão? Achei que tinha perdido. O endereço no verso vai te ajudar.",
     setFlag: 'witness_revealed_address',
     next: 'witness_address',
   },

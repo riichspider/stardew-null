@@ -54,7 +54,7 @@ export const EVIDENCE = {
     combinableWith: [],
     revealsDialogs: ['diary_revelation'],
   },
-  // Conclusões = hasil kombinasi
+  // Conclusões = resultado da combinação
   evidence_conclusion_1: {
     evidence: true,
     icon: '🔍',

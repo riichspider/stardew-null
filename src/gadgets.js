@@ -97,7 +97,7 @@ function useLanternUV(state, def) {
       const playerX = state.player.x;
       if (playerX >= 1150 && playerX <= 1250) {
         addItem(state.inventory, 'evidence_bloody_handprint', 1);
-        toast('🔦 UV revelou algo!血迹!');
+        toast('🔦 UV revelou algo! Rastro de sangue!');
         setFlag('uv_revealed_blood', true);
         return true;
       }
